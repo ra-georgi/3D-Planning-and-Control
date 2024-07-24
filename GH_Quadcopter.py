@@ -14,6 +14,7 @@ from DIRCOL_Euler import DIRCOL
 from Indirect_TrajOpt import iLQR
 
 import cvxpy as cp
+import pygad
 
 
 class Quadcopter:
@@ -73,7 +74,7 @@ class Quadcopter:
 
                         control_list = control_strat(state[:,i],t[i],i)
                         u =  jnp.array([control_list[0],control_list[1],control_list[2],control_list[3]]).squeeze()
-                        print(f"u trajectory {u}")
+                        # print(f"u trajectory {u}")
 
                         # Control Barrier Function for obstacles
                         if self.CBF_active:
@@ -85,7 +86,13 @@ class Quadcopter:
                                 # print(f"u clipped {u}")
 
                         state[:,i+1] = self.quad_rk4_step(state[:,i],u).reshape([13])
+                        if jnp.linalg.norm(state[3:7,i+1]) < 1.0:
+                                state[3:7,i+1] = state[3:7,i+1]/jnp.linalg.norm(state[3:7,i+1])
                         # print(state[:,i+1])
+                        if ( max(state[:,i+1]) > 10000 ):
+                                t = t[i]
+                                print("Numerical issues")
+                                break
 
                 return state, t
         
@@ -282,7 +289,7 @@ class Quadcopter:
                         pos_dot,quat_dot,vel_dot,omega_dot
                 ])       
 
-        def setup_PTP(self,xgoal,PTP_Params, ctrl_method):
+        def setup_PTP(self,xgoal,PTP_Params,ctrl_method):
 
                 self.mode = "PTP"
                 #for plotting
@@ -295,6 +302,7 @@ class Quadcopter:
                         self.z_integral = 0
                         self.phi_integral = 0
                         self.theta_integral = 0
+                        self.psi_integral = 0
 
                         PID_position_gains = PTP_Params[0]
                         PID_attitude_gains = PTP_Params[1]
@@ -305,6 +313,7 @@ class Quadcopter:
 
                         self.Kp_phi, self.Ki_phi, self.Kd_phi = PID_attitude_gains[0:3]
                         self.Kp_theta, self.Ki_theta, self.Kd_theta = PID_attitude_gains[3:6]
+                        self.Kp_psi, self.Ki_psi, self.Kd_psi = PID_attitude_gains[6:9]
 
                         inner_loop_rate = 1/self.h
                         outer_loop_rate = inner_loop_rate/4
@@ -340,7 +349,104 @@ class Quadcopter:
                         Q_lqr, R_lqr =PTP_Params
                         self.K, S, E = ct.dlqr(A_mod, B_mod, Q_lqr, R_lqr)                         
 
-        def PID_attitude_controller(self,state,t):
+        def PID_AutoTune(self):
+                self.des_state =  np.array([1.5,1.5,1.5, 20,20,20, 0,0,0, 0,0,0])
+                self.init_state_tune =  np.array([1.0,1,1, 0,0,0, 0,0,0, 0,0,0])
+
+                inner_loop_rate = 1/self.h
+                outer_loop_rate = inner_loop_rate/4
+                self.outer_loop_h = 1/outer_loop_rate
+                self.t_outer = self.outer_loop_h 
+
+                self.motor_matrix = np.array([
+                        [self.Kf,         self.Kf,        self.Kf,         self.Kf],
+                        [0,               self.l*self.Kf, 0,               -self.l*self.Kf],
+                        [-self.l*self.Kf, 0,              self.l*self.Kf,  0],
+                        [self.Km,         -self.Km,       self.Km,         -self.Km]
+                ])       
+
+                def on_gen(ga_instance):
+                        print("Generation : ", ga_instance.generations_completed)
+                        print("Fitness of the best solution :", ga_instance.best_solution()[1])
+
+                def inner_PID_GA_FitnessFunc(ga_instance, solution, solution_idx):
+                        print(solution)
+                        self.phi_integral = 0
+                        self.theta_integral = 0
+                        self.psi_integral = 0
+                        self.z_integral = 0
+
+                        self.Kp_phi, self.Ki_phi, self.Kd_phi   = solution[0:3]
+                        self.Kp_theta, self.Ki_theta, self.Kd_theta  = solution[3:6]
+                        self.Kp_psi, self.Ki_psi, self.Kd_psi  = solution[6:9]   
+                        self.Kp_z, self.Ki_z, self.Kd_z,  = solution[9:12] 
+
+                        cost = 0
+                        Q = 0.01*np.eye(3)
+
+                        state, t = self.simulate(self.init_state_tune, self.PID_attitude_controller)
+                        if type(t) == np.float64:
+                                print(f"Zero Cost")
+                                return 0
+                        else:        
+                                for i in range(self.N-1):
+                                        quat = R.from_quat([state[4,i], state[5,i], state[6,i], state[3,i]])
+                                        eul = quat.as_euler('xyz', degrees=True)
+                                        temp = eul-self.des_state[0:3]
+                                        cost += temp.T@Q@temp
+                                print(f"Cost: {10+(1/cost)}")        
+                                return 10+(1/cost)
+
+                
+                fitness_function = inner_PID_GA_FitnessFunc
+
+                num_generations = 5
+                sol_per_pop = 20
+                num_parents_mating = 10
+                num_genes = 12
+                init_range_low = 0
+                init_range_high = 1
+                parent_selection_type = "tournament"
+                keep_parents = 10
+                crossover_type = "uniform"
+                crossover_probability=0.5
+                mutation_type = "random"
+                mutation_percent_genes = 2     
+
+                ga_instance = pygad.GA(num_generations=num_generations,
+                                num_parents_mating=num_parents_mating,
+                                on_generation=on_gen,
+                                fitness_func=fitness_function,
+                                sol_per_pop=sol_per_pop,
+                                num_genes=num_genes,
+                                init_range_low=init_range_low,
+                                init_range_high=init_range_high,
+                                parent_selection_type=parent_selection_type,
+                                keep_parents=keep_parents,
+                                crossover_probability=crossover_probability,
+                                crossover_type=crossover_type,
+                                mutation_type=mutation_type,
+                                stop_criteria=["saturate_15"],
+                                mutation_percent_genes=mutation_percent_genes)
+
+                ga_instance.run()
+
+                solution, solution_fitness, solution_idx = ga_instance.best_solution()
+                print("Parameters of the best solution : {solution}".format(solution=solution))
+                print("Fitness value of the best solution = {solution_fitness}".format(solution_fitness=solution_fitness)) 
+
+                self.Kp_phi, self.Ki_phi, self.Kd_phi   = solution[0:3]
+                self.Kp_theta, self.Ki_theta, self.Kd_theta  = solution[3:6]
+                self.Kp_psi, self.Ki_psi, self.Kd_psi  = solution[6:9]   
+                self.Kp_z, self.Ki_z, self.Kd_z,  = solution[9:12]                 
+
+                self.des_state =  np.array([1.5,1.5,1.5, 0,0,0, 0,0,0, 0,0,0])
+
+                return [solution[0:9],0,0,0,0,0,0,solution[9:12]]                     
+        
+
+
+        def PID_attitude_controller(self,state,t,i):
                 u = ((1/self.Kf)*self.m*self.g*0.25)*np.ones([4,1])
 
                 quat = R.from_quat([state[4], state[5], state[6], state[3]])
@@ -371,7 +477,7 @@ class Quadcopter:
 
                 return u.squeeze()
 
-        def PID_position_controller(self,state,t):
+        def PID_position_controller(self,state,t,i):
 
                 x,x_des = state[0], self.des_state[0]
                 vx, vx_des = state[7], self.des_state[6]

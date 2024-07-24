@@ -19,10 +19,10 @@ param_dict = {
   "Km": 0.0245,
   "Accel_g": 9.81,
   "TimeStep": 0.05,
-  "FinalTime": 5
+  "FinalTime": 10
 }
 
-#Used for PID
+# Used for PID
 # param_dict = {
 #   "Mass": 1,
 #   "Ixx": 1,
