@@ -6,15 +6,13 @@ from scipy.linalg import block_diag
 import math
 import jax
 import jax.numpy as jnp
-# import numpy as jnp
-#import numdifftools as nd
 import control as ct
 
-from DIRCOL_Euler import DIRCOL
-from Indirect_TrajOpt import iLQR
+# from Indirect_TrajOpt import iLQR
+from Indirect_TrajOpt_Quat import iLQR
 
 import cvxpy as cp
-import pygad
+
 
 
 class Quadcopter:
@@ -34,11 +32,11 @@ class Quadcopter:
 
                 self.control_lim = False
                 self.CA = False
-                self.mode = ""
                 self.CBF_active = False
 
                 self.param_dict = param_dict
-                self.N = int(self.tf/self.h)+1
+                self.N = int(self.tf/self.h)+1  
+                # self.PID_Gains =  np.zeros((6,3)) 
                 
         def setup_sim(self,sim_params):
                 if sim_params[0]:
@@ -49,6 +47,13 @@ class Quadcopter:
                 if sim_params[2]:
                         self.control_lim = True
                         self.clip_factor = sim_params[3]
+
+                self.motor_matrix = np.array([
+                        [self.Kf,         self.Kf,        self.Kf,         self.Kf],
+                        [0,               self.l*self.Kf, 0,               -self.l*self.Kf],
+                        [-self.l*self.Kf, 0,              self.l*self.Kf,  0],
+                        [self.Km,         -self.Km,       self.Km,         -self.Km]
+                ]) 
 
         # Simulate
         def simulate(self,initial_cond,control_strat):
@@ -89,7 +94,7 @@ class Quadcopter:
                         if jnp.linalg.norm(state[3:7,i+1]) < 1.0:
                                 state[3:7,i+1] = state[3:7,i+1]/jnp.linalg.norm(state[3:7,i+1])
                         # print(state[:,i+1])
-                        if ( max(state[:,i+1]) > 10000 ):
+                        if ( max(state[:,i+1]) > 1000000 ):
                                 t = t[i]
                                 print("Numerical issues")
                                 break
@@ -152,6 +157,16 @@ class Quadcopter:
                 self.ax_anim = plt.axes(projection='3d')
                 # Adjust the size of the plot within the figure
                 plt.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
+
+                self.ax2 = plt.axes([0.8, 0.7, 0.2, 0.2])
+                self.ax2.axis('off')  # Hide the axes for the inset      
+
+                # Initialize the text in the inset axes with a box around it
+                bbox_props = dict(boxstyle="round,pad=0.3", edgecolor="black", facecolor="lightgray")
+                self.text_t = self.ax2.text(0.1, 0.8, '', transform=self.ax2.transAxes, fontsize=12, bbox=bbox_props)
+                self.text_x = self.ax2.text(0.1, 0.6, '', transform=self.ax2.transAxes, fontsize=12, bbox=bbox_props)   
+                self.text_y = self.ax2.text(0.1, 0.4, '', transform=self.ax2.transAxes, fontsize=12, bbox=bbox_props)
+                self.text_z = self.ax2.text(0.1, 0.2, '', transform=self.ax2.transAxes, fontsize=12, bbox=bbox_props)                                             
                 
                 x0, y0, z0 = state[0,0], state[1,0], state[2,0]
                 x_min = np.min(state[0,:])
@@ -177,13 +192,10 @@ class Quadcopter:
                 self.ax_anim.set_ylim([0,10])
                 self.ax_anim.set_zlim([0,10])      
 
-                #Plot start and goal points
-                if self.mode == "PTP":
-                        self.ax_anim.scatter(self.xic_pos[0], self.xic_pos[1], self.xic_pos[2])     
-                        self.ax_anim.scatter(self.xgoal_pos[0], self.xgoal_pos[1], self.xgoal_pos[2])    
-                else:
-                        for wp in self.xgoal_pos:
-                                self.ax_anim.scatter(wp[0], wp[1], wp[2])     
+                # self.ax_anim.scatter(self.xic_pos[0], self.xic_pos[1], self.xic_pos[2])    
+                # Plot start and goal points
+                for wp in self.waypoints:
+                        self.ax_anim.scatter(wp[0], wp[1], wp[2])     
 
                 if self.CA:
                         r = 0.5
@@ -218,6 +230,10 @@ class Quadcopter:
                         self.quad_Arm2.set_data_3d([xt+Arm2_Start[0], xt+Arm2_End[0]], [yt+Arm2_Start[1], yt+Arm2_End[1]], [zt+Arm2_Start[2], zt+Arm2_End[2]])
                         self.quad_traj.set_data_3d(state[0,:frame],state[1,:frame],state[2,:frame])
 
+                        self.text_t.set_text(f't = {time:.2f} s')
+                        self.text_x.set_text(f'x = {xt:.2f} m')
+                        self.text_y.set_text(f'y = {yt:.2f} m')
+                        self.text_z.set_text(f'z = {zt:.2f} m')
                         # self.ax_anim.set_title(f"Time: {time} s, Position {xt}, {yt}, {zt}")
                         # print(f"Position at Frame no. {frame} is {xt},{yt},{zt}")
                         # self.fig.gca().relim()
@@ -225,7 +241,7 @@ class Quadcopter:
 
                         return 
 
-                self.ani = FuncAnimation(fig=fig, func=update_anim_quad,frames=state.shape[1], fargs=(state,t,self),interval=30)
+                self.ani = FuncAnimation(fig=fig, func=update_anim_quad,frames=state.shape[1], fargs=(state,t,self),interval=60)
                 plt.show()
 
         def quad_rk4_step(self,x,u):
@@ -289,14 +305,14 @@ class Quadcopter:
                         pos_dot,quat_dot,vel_dot,omega_dot
                 ])       
 
-        def setup_PTP(self,xgoal,PTP_Params,ctrl_method):
+        def setup_PTP(self,way_points,inter_times,PTP_Params,ctrl_method):
 
-                self.mode = "PTP"
                 #for plotting
-                self.xgoal_pos =xgoal[0:3]
+                self.waypoints = way_points
+                self.inter_times = inter_times
+                way_point_index = []
 
                 if ctrl_method == "PID":
-                        self.des_state =  np.array(xgoal)
                         self.x_integral = 0      
                         self.y_integral = 0                          
                         self.z_integral = 0
@@ -304,172 +320,238 @@ class Quadcopter:
                         self.theta_integral = 0
                         self.psi_integral = 0
 
-                        PID_position_gains = PTP_Params[0]
-                        PID_attitude_gains = PTP_Params[1]
-
-                        self.Kp_x, self.Ki_x, self.Kd_x   = PID_position_gains[0:3]
-                        self.Kp_y, self.Ki_y, self.Kd_y,  = PID_position_gains[3:6]
-                        self.Kp_z, self.Ki_z, self.Kd_z,  = PID_position_gains[6:9]   
-
-                        self.Kp_phi, self.Ki_phi, self.Kd_phi = PID_attitude_gains[0:3]
-                        self.Kp_theta, self.Ki_theta, self.Kd_theta = PID_attitude_gains[3:6]
-                        self.Kp_psi, self.Ki_psi, self.Kd_psi = PID_attitude_gains[6:9]
+                        if not hasattr(self, 'PID_Gains'):   #Check if auto tuning was done
+                                self.PID_Gains = PTP_Params
 
                         inner_loop_rate = 1/self.h
                         outer_loop_rate = inner_loop_rate/4
                         self.outer_loop_h = 1/outer_loop_rate
                         self.t_outer = self.outer_loop_h 
 
-                        self.motor_matrix = np.array([
-                                [self.Kf,       self.Kf,        self.Kf,        self.Kf],
-                                [0,             self.l*self.Kf, 0,              -self.l*self.Kf],
-                                [-self.l*self.Kf, 0,            self.l*self.Kf,  0],
-                                [self.Km,       -self.Km,       self.Km,        -self.Km]
-                        ])                        
+                        # self.des_state = np.zeros((12,self.N))
+
+                        x_final =  np.array(way_points[-1], dtype =float)
+                        self.des_state = np.kron(np.ones((1,self.N)), x_final.reshape((12,1)))
+                        inter_points = np.array(way_points[1:-1])
+                                
+                        for i in inter_times:
+                                index = int((i/self.h))
+                                way_point_index.append(index)
+
+                        index_array = way_point_index.copy()
+                        index_array.insert(0,0)
+
+                        for i in range(len(index_array)-1):
+                                self.des_state[:,index_array[i]:index_array[i+1]+1] = inter_points[i,:].reshape(12,1)                       
 
                 elif ctrl_method == "LQR":
-                        self.des_state = np.zeros(13)
-                        r = R.from_euler('xyz', [xgoal[3], xgoal[4], xgoal[5]], degrees=True)
-                        quat = r.as_quat()
+                        quat_way_points = []
+                        for i in way_points:
+                                r = R.from_euler('xyz', [i[3], i[4], i[5]], degrees=True)
+                                quat = r.as_quat()
+                                quat_way_points.append(np.concatenate((i[0:3],[quat[3],quat[0],quat[1],quat[2]],i[6:9],i[9:]), axis=None))  
 
-                        self.des_state[0:3] = xgoal[0:3]
-                        self.des_state[3:7] = [quat[3],quat[0],quat[1],quat[2]]
-                        self.des_state[7:10] = xgoal[6:9]
-                        self.des_state[10:13] = xgoal[9:]    
+                        x_final =  np.array(quat_way_points[-1], dtype =float)
+                        self.des_state = np.kron(np.ones((1,self.N)), x_final.reshape((13,1)))
+                        inter_points = np.array(quat_way_points[1:-1])
+                                
+                        for i in inter_times:
+                                index = int((i/self.h))
+                                way_point_index.append(index)
 
-                        self.xref =  jnp.array(self.des_state, dtype =float)
-                        self.uref = ((1/self.Kf)*self.m*self.g*0.25)*jnp.ones([4],dtype =float)
-                 
-                        A = jax.jacfwd(lambda y: self.quad_rk4_step(y, self.uref))(self.xref)
-                        B = jax.jacfwd(lambda y: self.quad_rk4_step(self.xref,y))(self.uref)
-                                            
-                        A_mod = (self.E(self.xref[3:7]).T)@A@self.E(self.xref[3:7])
-                        B_mod = (self.E(self.xref[3:7]).T)@B
+                        self.index_array = way_point_index.copy()
+                        self.index_array.insert(0,0)
 
-                        Q_lqr, R_lqr =PTP_Params
-                        self.K, S, E = ct.dlqr(A_mod, B_mod, Q_lqr, R_lqr)                         
+                        for i in range(len(self.index_array)-1):
+                                self.des_state[:,self.index_array[i]:self.index_array[i+1]+1] = inter_points[i,:].reshape(13,1)   
 
-        def PID_AutoTune(self):
-                self.des_state =  np.array([1.5,1.5,1.5, 20,20,20, 0,0,0, 0,0,0])
-                self.init_state_tune =  np.array([1.0,1,1, 0,0,0, 0,0,0, 0,0,0])
+                        self.Q_lqr, self.R_lqr = PTP_Params    
 
-                inner_loop_rate = 1/self.h
-                outer_loop_rate = inner_loop_rate/4
-                self.outer_loop_h = 1/outer_loop_rate
-                self.t_outer = self.outer_loop_h 
+                elif ctrl_method == "MPC":    
+                        pass
+                        self.Q_MPC = PTP_Params[0]
+                        self.R_MPC = PTP_Params[1]
+                        self.Qf_MPC = PTP_Params[2]
+                        # self.N+MPC_Params[4]
+                        self.MPC_Horizon = PTP_Params[3]
+                        self.xmin = PTP_Params[4]
+                        self.xmax = PTP_Params[5]
 
-                self.motor_matrix = np.array([
-                        [self.Kf,         self.Kf,        self.Kf,         self.Kf],
-                        [0,               self.l*self.Kf, 0,               -self.l*self.Kf],
-                        [-self.l*self.Kf, 0,              self.l*self.Kf,  0],
-                        [self.Km,         -self.Km,       self.Km,         -self.Km]
-                ])       
+                        quat_way_points = []
+                        for i in way_points:
+                                r = R.from_euler('xyz', [i[3], i[4], i[5]], degrees=True)
+                                quat = r.as_quat()
+                                quat_way_points.append(np.concatenate((i[0:3],[quat[3],quat[0],quat[1],quat[2]],i[6:9],i[9:]), axis=None))  
 
-                def on_gen(ga_instance):
-                        print("Generation : ", ga_instance.generations_completed)
-                        print("Fitness of the best solution :", ga_instance.best_solution()[1])
+                        reduced_way_points = []
+                        for i in quat_way_points:
+                                mrp = self.quat_to_rodrig(i[3:7])
+                                reduced_way_points.append(np.concatenate((i[0:3],mrp,i[7:10],i[10:13]), axis=None))
 
-                def inner_PID_GA_FitnessFunc(ga_instance, solution, solution_idx):
-                        print(solution)
-                        self.phi_integral = 0
-                        self.theta_integral = 0
-                        self.psi_integral = 0
-                        self.z_integral = 0
+                        x_final =  np.array(quat_way_points[-1], dtype =float)
+                        self.des_state = np.kron(np.ones((1,self.N+self.MPC_Horizon)), x_final.reshape((13,1)))
 
-                        self.Kp_phi, self.Ki_phi, self.Kd_phi   = solution[0:3]
-                        self.Kp_theta, self.Ki_theta, self.Kd_theta  = solution[3:6]
-                        self.Kp_psi, self.Ki_psi, self.Kd_psi  = solution[6:9]   
-                        self.Kp_z, self.Ki_z, self.Kd_z,  = solution[9:12] 
+                        mrp = self.quat_to_rodrig(x_final[3:7])
+                        x_final_reduced = np.concatenate((x_final[0:3],mrp,x_final[7:10],x_final[10:13]), axis=None)  
+                        self.des_state_reduced = np.kron(np.ones((1,self.N+self.MPC_Horizon)), x_final_reduced.reshape((12,1)))
 
-                        cost = 0
-                        Q = 0.01*np.eye(3)
+                        inter_points = np.array(quat_way_points[1:-1])
+                        reduced_inter_points = np.array(reduced_way_points[1:-1])
+                                
+                        for i in inter_times:
+                                index = int((i/self.h))
+                                way_point_index.append(index)
 
-                        state, t = self.simulate(self.init_state_tune, self.PID_attitude_controller)
-                        if type(t) == np.float64:
-                                print(f"Zero Cost")
-                                return 0
-                        else:        
-                                for i in range(self.N-1):
+                        self.index_array = way_point_index.copy()
+                        self.index_array.insert(0,0)
+
+                        for i in range(len(self.index_array)-1):
+                                self.des_state[:,self.index_array[i]:self.index_array[i+1]+1] = inter_points[i,:].reshape(13,1) 
+                                self.des_state_reduced[:,self.index_array[i]:self.index_array[i+1]+1] = reduced_inter_points[i,:].reshape(12,1)
+                
+        def PID_AutoTune(self,states,scaling_factor):
+                self.des_state =  np.array([3.0,3,3, 0,0,0, 0,0,0, 0,0,0])
+                self.init_state_tune =  np.array([3.0,3,3, 0,0,0, 0,0,0, 0,0,0])
+
+                actual_sim_time = self.tf
+                actual_time_step = self.h
+                actual_N = self.N
+
+                self.PID_Gains =  np.zeros((6,3)) 
+       
+                # for i in [3,4,5,2,0,1]:  
+                for i in states:  
+                        if i < 3:
+                                self.tf = 2
+                                self.h =0.05
+                                self.N = int(self.tf/self.h)+1  
+
+                                inner_loop_rate = 1/self.h
+                                outer_loop_rate = inner_loop_rate/4
+                                self.outer_loop_h = 1/outer_loop_rate
+                                self.t_outer = self.outer_loop_h   
+                        else:
+                                self.tf = 1
+                                self.h =0.05
+                                self.N = int(self.tf/self.h)+1       
+
+                        self.PID_tune_state(i,scaling_factor)
+
+                print(self.PID_Gains)
+     
+                self.tf = actual_sim_time
+                self.h = actual_time_step   
+                self.N = actual_N          
+ 
+        def PID_tune_state(self,idx,scaling_factor):
+                
+                print(f"Started tuning for state {idx+1}")
+                print(f" ")
+                self.des_state = np.copy(self.init_state_tune)
+                
+                if idx > 2:
+                        # r = R.from_euler('zyx', [90, 45, 30], degrees=True)
+                        # quat = R.from_quat([self.init_state_tune[4,i], self.init_state_tune[5,i], self.init_state_tune[6,i], self.init_state_tune[3,i]])
+                        # eul = quat.as_euler('xyz', degrees=True)                        
+                        self.des_state[idx] += 5
+                else:
+                        self.des_state[idx] += 0.5
+                
+                self.x_integral = 0      
+                self.y_integral = 0                          
+                self.z_integral = 0
+                self.phi_integral = 0
+                self.theta_integral = 0
+                self.psi_integral = 0
+
+                self.PID_Gains[idx,0] = 0.1*scaling_factor
+                
+                overshoot = 2
+                ss_error = 2
+                rise_time = 2
+
+                prop_gain_factor = 0.2
+                prop_iterations = 0
+                der_gain_factor = 0.2
+                der_iteraions = 0
+
+                tuned_state_var = np.zeros(self.N)
+
+                while np.linalg.norm([rise_time,ss_error,overshoot]) > 0.9:
+                        print(f"Current termination Critera (reqd. <0.7): {np.linalg.norm([rise_time,ss_error,overshoot])}")
+                        if idx > 2:
+                                state, t = self.simulate(self.init_state_tune, self.PID_attitude_controller)
+                        else:
+                                state, t = self.simulate(self.init_state_tune, self.PID_position_controller)
+
+                        if idx > 2:
+                                for i in range(self.N):
                                         quat = R.from_quat([state[4,i], state[5,i], state[6,i], state[3,i]])
                                         eul = quat.as_euler('xyz', degrees=True)
-                                        temp = eul-self.des_state[0:3]
-                                        cost += temp.T@Q@temp
-                                print(f"Cost: {10+(1/cost)}")        
-                                return 10+(1/cost)
+                                        tuned_state_var[i] = eul[idx-3]
+                        else:
+                                tuned_state_var  = state[idx,:]
 
+                        if max(tuned_state_var[0:int(self.N/2)]) >= self.des_state[idx]:
+
+                                rise_time = 0
+
+                                overshoot = max(tuned_state_var) - self.des_state[idx]
+                                if overshoot > 0.2:
+                                        self.PID_Gains[idx,2] += scaling_factor*(der_gain_factor + 0.2*(abs(overshoot)))
+                                        der_iteraions += 1
+                                        if der_iteraions >= 10:
+                                                der_gain_factor += 0.1
+                                                scaling_factor += 0.5
+                                                der_iteraions = 0
+                                                print(f"")
+                                                print(f"Increased deriv gain factor to {der_gain_factor}")
+                                                print(f"")                                        
+                                else:
+                                        ss_error = abs(self.des_state[idx]-tuned_state_var[-1])
+                                        if ss_error > 0.1:
+                                                self.PID_Gains[idx,1] += scaling_factor*(0.05 + 0.01*(ss_error))
+                                        
+                        else:
+                                rise_time = abs((self.des_state[idx]-max(tuned_state_var[0:int(self.N/2)])))
+                                self.PID_Gains[idx,0] += scaling_factor*(prop_gain_factor + 0.2*rise_time)
+                                prop_iterations += 1
+                                if prop_iterations >= 10:
+                                        prop_gain_factor += 0.1
+                                        scaling_factor += 0.5
+                                        prop_iterations = 0
+                                        print(f"")
+                                        print(f"Increased prop gain factor to {prop_gain_factor}")
+                                        print(f"")  
+
+                                
+                # return 0
                 
-                fitness_function = inner_PID_GA_FitnessFunc
-
-                num_generations = 5
-                sol_per_pop = 20
-                num_parents_mating = 10
-                num_genes = 12
-                init_range_low = 0
-                init_range_high = 1
-                parent_selection_type = "tournament"
-                keep_parents = 10
-                crossover_type = "uniform"
-                crossover_probability=0.5
-                mutation_type = "random"
-                mutation_percent_genes = 2     
-
-                ga_instance = pygad.GA(num_generations=num_generations,
-                                num_parents_mating=num_parents_mating,
-                                on_generation=on_gen,
-                                fitness_func=fitness_function,
-                                sol_per_pop=sol_per_pop,
-                                num_genes=num_genes,
-                                init_range_low=init_range_low,
-                                init_range_high=init_range_high,
-                                parent_selection_type=parent_selection_type,
-                                keep_parents=keep_parents,
-                                crossover_probability=crossover_probability,
-                                crossover_type=crossover_type,
-                                mutation_type=mutation_type,
-                                stop_criteria=["saturate_15"],
-                                mutation_percent_genes=mutation_percent_genes)
-
-                ga_instance.run()
-
-                solution, solution_fitness, solution_idx = ga_instance.best_solution()
-                print("Parameters of the best solution : {solution}".format(solution=solution))
-                print("Fitness value of the best solution = {solution_fitness}".format(solution_fitness=solution_fitness)) 
-
-                self.Kp_phi, self.Ki_phi, self.Kd_phi   = solution[0:3]
-                self.Kp_theta, self.Ki_theta, self.Kd_theta  = solution[3:6]
-                self.Kp_psi, self.Ki_psi, self.Kd_psi  = solution[6:9]   
-                self.Kp_z, self.Ki_z, self.Kd_z,  = solution[9:12]                 
-
-                self.des_state =  np.array([1.5,1.5,1.5, 0,0,0, 0,0,0, 0,0,0])
-
-                return [solution[0:9],0,0,0,0,0,0,solution[9:12]]                     
-        
-
-
         def PID_attitude_controller(self,state,t,i):
                 u = ((1/self.Kf)*self.m*self.g*0.25)*np.ones([4,1])
 
                 quat = R.from_quat([state[4], state[5], state[6], state[3]])
                 eul = quat.as_euler('xyz', degrees=True)
 
-                phi, phi_des = eul[0], self.des_state[3]
-                ang_vel_x, ang_vel_x_des = state[10], self.des_state[9]    #using omega from state is an approximation
-                theta, theta_des = eul[1], self.des_state[4]
-                ang_vel_y, ang_vel_y_des = state[11], self.des_state[10]    #using omega from state is an approximation
-                psi, psi_des = eul[2], self.des_state[5]
-                ang_vel_z, ang_vel_z_des = state[12], self.des_state[11]    #using omega from state is an approximation
+                phi, phi_des = eul[0], self.des_state[3,i]
+                ang_vel_x, ang_vel_x_des = state[10], self.des_state[9,i]    #using omega from state is an approximation
+                theta, theta_des = eul[1], self.des_state[4,i]
+                ang_vel_y, ang_vel_y_des = state[11], self.des_state[10,i]    #using omega from state is an approximation
+                psi, psi_des = eul[2], self.des_state[5,i]
+                ang_vel_z, ang_vel_z_des = state[12], self.des_state[11,i]    #using omega from state is an approximation
 
-                z, z_des = state[2], self.des_state[2]
-                vz, vz_des = state[9], self.des_state[8]
+                z, z_des = state[2], self.des_state[2,i]
+                vz, vz_des = state[9], self.des_state[8,i]
 
                 self.z_integral += self.h*(z_des-z)
                 self.phi_integral += self.h*(phi_des-phi)
                 self.theta_integral += self.h*(theta_des-theta)
+                self.psi_integral += self.h*(psi_des-psi)
 
-                T = self.Kp_z*(z_des-z) + self.Kd_z*(vz_des-vz) #+ Ki_z*self.z_integral
-                M_x = self.Kp_phi*(phi_des-phi) + self.Kd_phi*(ang_vel_x_des-ang_vel_x) + self.Ki_phi*self.phi_integral
-                M_y = self.Kp_theta*(theta_des-theta) + self.Kd_theta*(ang_vel_y_des-ang_vel_y) + self.Ki_theta*self.theta_integral
-                M_z = 0
+                T   = np.dot(self.PID_Gains[2,:],[z_des-z, self.z_integral, vz_des-vz])
+                M_x = np.dot(self.PID_Gains[3,:],[phi_des-phi, self.phi_integral, ang_vel_x_des-ang_vel_x])
+                M_y = np.dot(self.PID_Gains[4,:],[theta_des-theta, self.theta_integral, ang_vel_y_des-ang_vel_y])
+                M_z = np.dot(self.PID_Gains[5,:],[psi_des-psi, self.psi_integral, ang_vel_z_des-ang_vel_z])
 
                 F_vec = np.array([T,M_x,M_y,M_z]).reshape(4,1)
                 x = np.linalg.solve(self.motor_matrix, F_vec)
@@ -479,10 +561,10 @@ class Quadcopter:
 
         def PID_position_controller(self,state,t,i):
 
-                x,x_des = state[0], self.des_state[0]
-                vx, vx_des = state[7], self.des_state[6]
-                y,y_des = state[1], self.des_state[1]
-                vy, vy_des = state[8], self.des_state[7]
+                x,x_des = state[0], self.des_state[0,i]
+                vx, vx_des = state[7], self.des_state[6,i]
+                y,y_des = state[1], self.des_state[1,i]
+                vy, vy_des = state[8], self.des_state[7,i]
 
                 self.x_integral += self.h*(x_des-x)
                 self.y_integral += self.h*(y-y_des)
@@ -490,13 +572,13 @@ class Quadcopter:
                 self.t_outer += self.h
 
                 if self.t_outer >= self.outer_loop_h:
-                        phi_des = self.Kp_y*(y-y_des) + self.Kd_y*(vy-vy_des) + self.Ki_y*self.y_integral
+                        phi_des= np.dot(self.PID_Gains[1,:],[y-y_des, self.y_integral, vy-vy_des])
                         if phi_des > 20:
                                 phi_des = 20
                         elif phi_des < -20:
                                 phi_des = -20
                         self.des_state[3] = phi_des
-                        theta_des = self.Kp_x*(x_des-x) + self.Kd_x*(vx_des-vx) + self.Ki_x*self.x_integral
+                        theta_des = np.dot(self.PID_Gains[0,:],[x_des-x, self.x_integral, vx_des-vx])
                         if theta_des > 20:
                                 theta_des = 20
                         elif theta_des < -20:
@@ -505,14 +587,14 @@ class Quadcopter:
 
                         self.t_outer = 0
 
-                u = self.PID_attitude_controller(state,t)
+                u = self.PID_attitude_controller(state,t,i)
                 return u
         
-        def gen_traj(self,way_points,Traj_Params):
+        def gen_traj(self,way_points,inter_times,Traj_Params):
 
                 self.mode = "TT"
                 #for plotting
-                self.xgoal_pos = way_points
+                self.waypoints = way_points
 
                 # ic_q = R.from_quat([xic[4],xic[5],xic[6],xic[3]])
                 # goal_q = R.from_quat([xgoal[4],xgoal[5],xgoal[6],xgoal[3]])
@@ -530,13 +612,24 @@ class Quadcopter:
                 # planner = DIRCOL(self.param_dict)
                 # self.DIRCOL_control = planner.solve_NLP(xic,xgoal)  
 
-                planner = iLQR(self.param_dict,self.quad_rk4_step,way_points,Traj_Params)
+                planner = iLQR(self.param_dict,self.quad_rk4_step,way_points,inter_times,Traj_Params)
                 self.iLQR_control,self.K,self.xref = planner.calc_trajectory()  
 
-        def DIRCOL_Controller(self,state,t):
-                pass
+        def PTP_lqr_controller(self,state,t,i):
+                
+                if i in self.index_array:
+                        self.xref =  jnp.array(self.des_state[:,i+1], dtype =float)
+                        self.uref = ((1/self.Kf)*self.m*self.g*0.25)*jnp.ones([4],dtype =float)
+                        
+                        A = jax.jacfwd(lambda y: self.quad_rk4_step(y, self.uref))(self.xref)
+                        B = jax.jacfwd(lambda y: self.quad_rk4_step(self.xref,y))(self.uref)
+                                                
+                        A_mod = (self.E(self.xref[3:7]).T)@A@self.E(self.xref[3:7])
+                        B_mod = (self.E(self.xref[3:7]).T)@B
 
-        def PTP_lqr_controller(self,state,t):
+                        self.K, S, E = ct.dlqr(A_mod, B_mod, self.Q_lqr, self.R_lqr) 
+
+
                 q0 = self.xref[3:7]
                 q = state[3:7]
                 phi = self.quat_to_rodrig(self.L(q0).T@q)
@@ -558,88 +651,22 @@ class Quadcopter:
                 u = self.uref - self.K[:,:,i]@del_x
                 return u        
 
-        def setup_MPC(self,MPC_Params):
-                self.Q_MPC = MPC_Params[0]
-                self.R_MPC = MPC_Params[1]
-                self.Qf_MPC = MPC_Params[2]
-                if not isinstance(MPC_Params[3], np.ndarray):  #Check instead if this is numpy array or not  
-                        self.mode = "PTP"
-                        x_final = np.array(MPC_Params[3]).reshape(12,1)
-                        self.xgoal = np.repeat(x_final,self.N+MPC_Params[4],axis=1)
-                else:
-                        self.mode = "TT"
-                        self.xgoal = np.zeros([12,self.N+MPC_Params[4]])
-                        self.xgoal[:,0:self.N] = MPC_Params[3]
-                        self.xgoal[:,self.N:] = np.repeat(MPC_Params[3][:,-1].reshape(12,1),MPC_Params[4],axis=1)
-                        x_final = self.xgoal[:,-1].reshape(12,1)
-                #for plotting
-                self.xgoal_pos = MPC_Params[3]
-                self.MPC_Horizon = MPC_Params[4]
-                self.xmin = MPC_Params[5]
-                self.xmax = MPC_Params[6]
-                self.MPC_clip_factor = MPC_Params[7]
-
-                # Linearizing about hover condition of goal position
-                self.des_state =  np.zeros(13)
-                self.des_state[0:3] = x_final[0:3,0]
-                # self.des_state[0:3] = [3,3,1]
-                self.des_state[3:7] = [1,0,0,0]
-
-
-                self.xref =  jnp.array(self.des_state, dtype =float)
-                self.uref = ((1/self.Kf)*self.m*self.g*0.25)*jnp.ones([4],dtype =float)
-
-                mrp = self.quat_to_rodrig(self.xref[3:7])
-                self.xref_reduced = np.concatenate((self.xref[0:3],mrp,self.xref[7:10],self.xref[10:13]), axis=None)                 
-                
-                A = jax.jacfwd(lambda y: self.quad_rk4_step(y, self.uref))(self.xref)
-                B = jax.jacfwd(lambda y: self.quad_rk4_step(self.xref,y))(self.uref)
-                                        
-                self.A_mrp = (self.E(self.xref[3:7]).T)@A@self.E(self.xref[3:7])
-                self.B_mrp = (self.E(self.xref[3:7]).T)@B                
-
-        def MPC_controllerOLD(self,state,t,index):
-                # x_goal_horizon =  self.xgoal[:,i:i+self.MPC_Horizon]
-                x_goal_horizon =  self.xgoal
-                del_x = cp.Variable((12,self.MPC_Horizon))
-                del_u = cp.Variable((4,self.MPC_Horizon-1))
-                constraints = []
-
-                cost = 0.0
-                for i in range(self.MPC_Horizon):
-                        xi = self.xref_reduced + del_x[:,i]
-                        cost += 0.5*cp.quad_form(xi - x_goal_horizon[:,i], self.Q_MPC)
-
-                for i in range(self.MPC_Horizon-1):
-                        ui = self.uref  + del_u[:,i]
-                        cost += 0.5*cp.quad_form(ui, self.R_MPC)
-
-                obj = cp.Minimize(cost)
-                mrp = self.quat_to_rodrig(state[3:7])
-                x0 = np.concatenate((state[0:3],mrp,state[7:10],state[10:13]), axis=None) 
-
-                # initial condition constraint
-                constraints += [self.xref_reduced + del_x[:,1] == x0]
-
-                # add dynamics constraints
-                for i in range(self.MPC_Horizon-1):
-                        constraints += [ del_x[:,i+1] ==  (self.A_mrp@del_x[:,i]) + (self.B_mrp@del_u[:,i]) ]
-                        for j in del_u[:,i]:
-                                constraints +=  [j  >=  0]   
-                                constraints +=  [j  <=  self.m*self.g*self.MPC_clip_factor]   
-
-                prob = cp.Problem(obj, constraints)
-                prob.solve()  # Returns the optimal value.   
-                print("status:", prob.status)
-                print("value:", prob.value)
-
-                u_soln = del_u.value
-                print(f"{u_soln[:,0]} at {index}" )
-                return self.uref + u_soln[:,0]                
-
         def MPC_controller(self,state,t,index):
-                x_goal_horizon =  self.xgoal[:,index:index+self.MPC_Horizon]
-                # x_goal_horizon =  self.xgoal
+
+                if index in self.index_array:
+                        self.xref =  jnp.array(self.des_state[:,index+1], dtype =float)
+                        self.uref = ((1/self.Kf)*self.m*self.g*0.25)*jnp.ones([4],dtype =float)
+
+                        mrp = self.quat_to_rodrig(self.xref[3:7])
+                        self.xref_reduced = np.concatenate((self.xref[0:3],mrp,self.xref[7:10],self.xref[10:13]), axis=None)                 
+                        
+                        A = jax.jacfwd(lambda y: self.quad_rk4_step(y, self.uref))(self.xref)
+                        B = jax.jacfwd(lambda y: self.quad_rk4_step(self.xref,y))(self.uref)
+                                                
+                        self.A_mrp = (self.E(self.xref[3:7]).T)@A@self.E(self.xref[3:7])
+                        self.B_mrp = (self.E(self.xref[3:7]).T)@B 
+
+                x_goal_horizon =  self.des_state_reduced[:,index:index+self.MPC_Horizon]
                 del_x = cp.Variable(12*self.MPC_Horizon)
                 del_u = cp.Variable(4*(self.MPC_Horizon-1))
                 constraints = []
@@ -665,7 +692,7 @@ class Quadcopter:
                         constraints += [ del_x[(i+1)*12:((i+1)*12)+12] ==  (self.A_mrp@del_x[i*12:(i*12)+12]) + (self.B_mrp@del_u[i*4:(i*4)+4]) ]
                         for j in del_u[i*4:(i*4)+4]:
                                 constraints +=  [j  >=  -((1/self.Kf)*self.m*self.g*0.25)]   
-                                constraints +=  [j  <=  self.m*self.g*self.MPC_clip_factor]    
+                                constraints +=  [j  <=  self.m*self.g*self.clip_factor]    
 
                 prob = cp.Problem(obj, constraints)
                 prob.solve()  # Returns the optimal value.   
