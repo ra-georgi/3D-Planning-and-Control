@@ -19,7 +19,7 @@ param_dict = {
   "Km": 0.0245,
   "Accel_g": 9.81,
   "TimeStep": 0.05,
-  "FinalTime": 7
+  "FinalTime": 10
 }
 
 # PID_Gains = [[2.56278919e+01, 0., 1.28994728e+01],

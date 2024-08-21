@@ -241,7 +241,7 @@ class Quadcopter:
 
                         return 
 
-                self.ani = FuncAnimation(fig=fig, func=update_anim_quad,frames=state.shape[1], fargs=(state,t,self),interval=60)
+                self.ani = FuncAnimation(fig=fig, func=update_anim_quad,frames=state.shape[1], fargs=(state,t,self),interval=15)
                 plt.show()
 
         def quad_rk4_step(self,x,u):
