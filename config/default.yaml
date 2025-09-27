@@ -1,0 +1,71 @@
+time:
+  dt: 0.05
+  duration: 10.0
+
+quadcopter:
+  mass: 0.5
+  I_xx: 0.0023
+  I_yy: 0.0023
+  I_zz: 0.004
+  arm_length: 0.175
+  motor: {kf: 1, km: 0}
+  limits:
+    clip_factor: 10
+    # roll_pitch_rad: 0.6
+    # yaw_rate: 3.5
+    # thrust_total: [0.0, 18.0]
+
+constants:
+  acc_gravity: 9.81
+
+world:
+  waypoints:  #List of dictionaries
+    - {t: 0.0,  p: [0.0, 0.0, 1.0]}
+    - {t: 5.0,  p: [1.0, 0.5, 1.2]}
+  obstacles:
+    static:
+    - {type: sphere, pose: [2.0, 0.0, 1.0], radius: [0.2]}
+      # - {type: box, pose: [2.0, 0.0, 1.0, 0,0,0], size: [0.2, 4.0, 2.0]}
+  wind:
+    speed: 0
+    direction: [1,0,0]
+
+
+# logging:
+#   level: INFO
+#   save_telemetry: true
+#   out_dir: outputs
+
+# vehicle:
+#   mass: 1.25
+#   inertia: [0.02, 0.02, 0.04]
+#   arm_length: 0.17
+#   motor: {kf: 2.3e-6, km: 1.2e-7, max_rpm: 14000}
+#   limits:
+#     roll_pitch_rad: 0.6
+#     yaw_rate: 3.5
+#     thrust_total: [0.0, 18.0]
+
+# controller:
+#   type: iLQR               # PID | LQR | iLQR | MPC
+#   pid:
+#     gains:
+#       roll:  {kp: 4.0, ki: 0.2, kd: 0.1}
+#       pitch: {kp: 4.0, ki: 0.2, kd: 0.1}
+#       yaw:   {kp: 2.5, ki: 0.1, kd: 0.05}
+#       z:     {kp: 6.0, ki: 0.3, kd: 0.2}
+#     loop_rate_hz: 200
+#   ilqr:
+#     horizon_steps: 50
+#     max_iters: 50
+#     regularization: {lambda_init: 1.0, lambda_factor: 10.0}
+#     line_search: [1.0, 0.5, 0.25, 0.1]
+#     constraints: {thrust_min: 0.0, thrust_max: 15.0}
+
+# planner:
+#   type: ASTAR              # ASTAR | DIJKSTRA | MPPI
+#   astar:
+#     grid: {resolution: 0.1, inflation_radius: 0.2}
+#     heuristic: euclidean
+
+

@@ -1,6 +1,6 @@
 # 3D-Planning-and-Control
 
-This project provides Python code to simulate Quadrotor flight using different control techniques for different scenarios.
+Currently doing some updates, so the other files can be ignored until the updates are done. This project provides Python code to simulate Quadrotor flight using different control techniques for different scenarios.
 
 
 ![Obstacle avoidance using iLQR](QuadSim.gif) 
