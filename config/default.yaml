@@ -1,6 +1,6 @@
 time:
   dt: 0.05
-  duration: 10.0
+  duration: 5.0
 
 quadcopter:
   mass: 0.5
