@@ -10,7 +10,11 @@ with open("config/default.yaml", "r") as f:
 controller = Hover_Controller(sim_cfg)
 simulator  = Simulator(sim_cfg)
 
-simulator.simulate(controller)
-
-
+times, states, controls = simulator.simulate(controller)
+print(times)
+print()
+print(states)
+print()
+print(controls)
+print()
 

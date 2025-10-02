@@ -8,7 +8,7 @@ quadcopter:
   I_yy: 0.0023
   I_zz: 0.004
   arm_length: 0.175
-  motor: {kf: 1, km: 0}
+  motor: {kf: 1, km: 0.0245}
   limits:
     clip_factor: 10
     # roll_pitch_rad: 0.6
