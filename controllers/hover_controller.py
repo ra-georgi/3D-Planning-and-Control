@@ -11,7 +11,7 @@ class Hover_Controller(Controller):
         m = self.params["quadcopter"]["mass"]
         g = self.params["constants"]["acc_gravity"]
         u = (m*g)/4
-        return u*np.ones((4, 1))
+        return u*np.ones((4))
         
 
 

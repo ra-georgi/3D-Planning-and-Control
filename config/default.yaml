@@ -30,9 +30,9 @@ world:
                     0.0, 0.0, 0.0,             
                     0.0, 0.0, 0.0 ]}           
     
-  obstacles:
-    static:
-    - {type: sphere, pose: [2.0, 0.0, 1.0], radius: [0.2]}
+obstacles:
+  static:
+    - {type: sphere, pose: [2.0, 0.0, 1.0], radius: 0.2}
       # - {type: box, pose: [2.0, 0.0, 1.0, 0,0,0], size: [0.2, 4.0, 2.0]}
   wind:
     speed: 0

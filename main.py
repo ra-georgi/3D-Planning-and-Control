@@ -1,5 +1,6 @@
 import yaml
 from core.simulator import Simulator
+from core.visualizer import Visualizer
 
 # Controllers
 from controllers.hover_controller import Hover_Controller
@@ -11,10 +12,7 @@ controller = Hover_Controller(sim_cfg)
 simulator  = Simulator(sim_cfg)
 
 times, states, controls = simulator.simulate(controller)
-print(times)
-print()
-print(states)
-print()
-print(controls)
-print()
 
+visualizer = Visualizer(sim_cfg, times, states, controls)
+# visualizer.plot_states()
+visualizer.animate_quadcopter()

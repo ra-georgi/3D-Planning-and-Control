@@ -20,8 +20,8 @@ class Simulator():
         n_steps = int(tf/dt)
         x0 = np.array(waypoints[0]["pose"], dtype=float)
 
-        states   = np.zeros([13, n_steps])
-        times    = np.zeros([n_steps])
+        states   = np.zeros([13, n_steps+1])
+        times    = np.zeros([n_steps+1])
         controls = np.zeros([4, n_steps])
 
         states[:, 0] = x0
@@ -30,14 +30,16 @@ class Simulator():
             x_current = states[:, idx-1]
             t  = idx * dt
             u  = controller.calculate_control(x_current, t) 
-            print(f"Time: {t}")
+            
+            if (t%1==0):
+                print(f"Time: {t}")
 
             #TODO: CLIP CONTROL TO RESPECT LIMITS
                 #####
 
             states[:, idx]  = self.take_rk4_step(x_current,u)
             times[idx]      = t
-            controls[:,idx] = u
+            controls[:,idx-1] = u
 
             # dx = system(x, u, t)                # system dynamics
             # x  = x + dx * dt                     # simple Euler integration
