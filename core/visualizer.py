@@ -1,8 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
+
 from matplotlib.animation import FuncAnimation
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from matplotlib.patches import FancyBboxPatch
+from matplotlib import patheffects as pe
 
 class Visualizer():
 
@@ -73,18 +76,67 @@ class Visualizer():
         fig = plt.figure(figsize=(15,7),dpi=100)
         self.ax_anim = plt.axes(projection='3d')
 
+        for a in (self.ax_anim.xaxis, self.ax_anim.yaxis, self.ax_anim.zaxis):
+            a.pane.set_facecolor((0.8, 0.8, 0.8, 0.03))   # almost transparent white
+            a.pane.set_edgecolor((1, 1, 1, 0.1))    # faint edges
+        self.ax_anim.zaxis.pane.set_facecolor("#FFD39B") 
+
+        # self.ax_anim.set_facecolor("skyblue")
+        self.ax_anim.set_facecolor("#c1e4f5")
+        self.ax_anim.tick_params(colors=(0,0,0), labelsize=5)
+        self.ax_anim.grid(False)
+        # self.ax_anim.grid(True, color="white", linewidth=0.2, alpha=0.2)
+
         # Adjust the size of the plot within the figure
         plt.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
 
         self.ax2 = plt.axes([0.8, 0.8, 0.2, 0.2])
         self.ax2.axis('off')  # Hide the axes for the inset      
 
-        # Initialize the text in the inset axes with a box around it
-        bbox_props = dict(boxstyle="round,pad=0.3", edgecolor="black", facecolor="lightgray")
-        self.text_t = self.ax2.text(0.1, 0.8, '', transform=self.ax2.transAxes, fontsize=12, bbox=bbox_props)
-        self.text_x = self.ax2.text(0.1, 0.6, '', transform=self.ax2.transAxes, fontsize=12, bbox=bbox_props)   
-        self.text_y = self.ax2.text(0.1, 0.4, '', transform=self.ax2.transAxes, fontsize=12, bbox=bbox_props)
-        self.text_z = self.ax2.text(0.1, 0.2, '', transform=self.ax2.transAxes, fontsize=12, bbox=bbox_props)     
+        # Optional Box for effect
+        # card = FancyBboxPatch(
+        #     (0.79, 0.895), 0.05, 0.05,  # (x, y, w, h) in figure coords
+        #     transform=fig.transFigure,
+        #     boxstyle="round,pad=0.05,rounding_size=0.015",
+        #     # facecolor=(1, 1, 1, 0.88),     # soft white, slightly transparent
+        #     facecolor= "lightgray",
+        #     edgecolor=(0, 0, 0, 0.25),
+        #     linewidth=1.0
+        # )
+        
+        # # subtle shadow
+        # card.set_path_effects([pe.withSimplePatchShadow(offset=(1.5, -1.5), alpha=0.25)])
+        # fig.patches.append(card)
+
+        # Monospaced, right-aligned numbers
+        # self.hud_text = fig.text(
+        #     0.85, 0.945, "", ha="left", va="top",
+        #     family="DejaVu Sans Mono", fontsize=11, color="#222"
+        # )
+
+        hud_title = fig.text(0.5, 0.98, "Flight Animation",
+                          ha="center", va="top", fontsize=12, weight="bold")
+
+
+        self.hud_text = fig.text(
+            0.621, 0.98, "", ha="left", va="top",
+            family="DejaVu Sans Mono", fontsize=11, color="#222",
+            bbox=dict(boxstyle="round,pad=0.5,rounding_size=0.02",
+                    facecolor=(1,1,1,0.90), edgecolor=(0,0,0,0.25)),
+            zorder=10, clip_on=False
+        )
+
+        # thin stroke for legibility on any background
+        self.hud_text.set_path_effects([pe.withStroke(linewidth=2, foreground=(1,1,1,0.7))])
+
+
+
+        # # Initialize the text in the inset axes with a box around it
+        # bbox_props = dict(boxstyle="round,pad=0.3", edgecolor="black", facecolor="lightgray")
+        # self.text_t = self.ax2.text(0.1, 0.8, '', transform=self.ax2.transAxes, fontsize=12, bbox=bbox_props)
+        # self.text_x = self.ax2.text(0.1, 0.6, '', transform=self.ax2.transAxes, fontsize=12, bbox=bbox_props)   
+        # self.text_y = self.ax2.text(0.1, 0.4, '', transform=self.ax2.transAxes, fontsize=12, bbox=bbox_props)
+        # self.text_z = self.ax2.text(0.1, 0.2, '', transform=self.ax2.transAxes, fontsize=12, bbox=bbox_props)     
 
         state = self.states       
         l = self.params["quadcopter"]["arm_length"]                                 
@@ -237,10 +289,18 @@ class Visualizer():
                                     self.states[1,:frame],
                                     self.states[2,:frame])
 
-            self.text_t.set_text(f't = {time:.2f} s')
-            self.text_x.set_text(f'x = {xt:.2f} m')
-            self.text_y.set_text(f'y = {yt:.2f} m')
-            self.text_z.set_text(f'z = {zt:.2f} m')
+            # self.text_t.set_text(f't = {time:.2f} s')
+            # self.text_x.set_text(f'x = {xt:.2f} m')
+            # self.text_y.set_text(f'y = {yt:.2f} m')
+            # self.text_z.set_text(f'z = {zt:.2f} m')
+
+            control = self.params.get("controller", {}).get("name", "PID")
+
+            self.hud_text.set_text(
+                "Control Method: TBD\n t  = {:>7.2f} s\n x  = {:>7.2f} m\n y  = {:>7.2f} m\n z  = {:>7.2f} m"
+                .format(time, xt, yt, zt)
+)
+
 
             return 
     

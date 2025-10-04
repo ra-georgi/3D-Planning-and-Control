@@ -41,8 +41,6 @@ class Simulator():
             times[idx]      = t
             controls[:,idx-1] = u
 
-            # dx = system(x, u, t)                # system dynamics
-            # x  = x + dx * dt                     # simple Euler integration
 
         return times, states, controls
         
