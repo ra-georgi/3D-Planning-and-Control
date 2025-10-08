@@ -176,9 +176,9 @@ class Visualizer():
 
         #To make quadcopter's arms look equal in animation
         # TODO: Make the limits to parameters that can be set
-        self.ax_anim.set_xlim([0,5])
-        self.ax_anim.set_ylim([0,5])
-        self.ax_anim.set_zlim([0,5])      
+        self.ax_anim.set_xlim([-5,5])
+        self.ax_anim.set_ylim([-5,5])
+        self.ax_anim.set_zlim([-5,5])      
  
         # Plot start and goal points
         waypoints =  self.params["world"]["waypoints"]

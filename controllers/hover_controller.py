@@ -8,8 +8,8 @@ class Hover_Controller(Controller):
 
     def calculate_control(self,x,t): #-> str:
         """Calculate and return control input"""
-        m = self.params["quadcopter"]["mass"]
-        g = self.params["constants"]["acc_gravity"]
+        m = self.sim_params["quadcopter"]["mass"]
+        g = self.sim_params["constants"]["acc_gravity"]
         u = (m*g)/4
         return u*np.ones((4))
         

@@ -39,6 +39,7 @@ obstacles:
     direction: [1,0,0]
 
 
+
 # logging:
 #   level: INFO
 #   save_telemetry: true
@@ -70,10 +71,6 @@ obstacles:
 #     line_search: [1.0, 0.5, 0.25, 0.1]
 #     constraints: {thrust_min: 0.0, thrust_max: 15.0}
 
-# planner:
-#   type: ASTAR              # ASTAR | DIJKSTRA | MPPI
-#   astar:
-#     grid: {resolution: 0.1, inflation_radius: 0.2}
-#     heuristic: euclidean
+
 
 

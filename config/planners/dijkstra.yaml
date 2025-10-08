@@ -1,0 +1,9 @@
+type: DIJKSTRA              # ASTAR | DIJKSTRA | MPPI
+grid:
+  resolution: 0.5
+  limits: {x: [-5,5], y: [-5,5], z: [-5,5]}
+interpolation: "Quintic"
+
+# astar:
+#   grid: {resolution: 0.1, inflation_radius: 0.2}
+#   heuristic: euclidean
