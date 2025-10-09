@@ -3,7 +3,7 @@ from core.simulator import Simulator
 from core.visualizer import Visualizer
 
 # Planners
-from planners.dijkstra import Dijkstra
+from planners.dijkstra import Dijkstra_Planner
 
 # Controllers
 from controllers.hover_controller import Hover_Controller
@@ -11,7 +11,7 @@ from controllers.hover_controller import Hover_Controller
 with open("config/default.yaml", "r") as f:
     sim_cfg = yaml.safe_load(f)
 
-planner = Dijkstra(sim_cfg)
+planner    = Dijkstra_Planner(sim_cfg)
 controller = Hover_Controller(sim_cfg)
 simulator  = Simulator(sim_cfg)
 

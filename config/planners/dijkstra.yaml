@@ -3,6 +3,7 @@ grid:
   resolution: 0.5
   limits: {x: [-5,5], y: [-5,5], z: [-5,5]}
 interpolation: "Quintic"
+obstacle_inflation_ratio: 1.5
 
 # astar:
 #   grid: {resolution: 0.1, inflation_radius: 0.2}
