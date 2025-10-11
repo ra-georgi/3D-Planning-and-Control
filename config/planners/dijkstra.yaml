@@ -1,6 +1,6 @@
 type: DIJKSTRA              # ASTAR | DIJKSTRA | MPPI
 grid:
-  resolution: 0.5
+  resolution: 0.1
   limits: {x: [-5,5], y: [-5,5], z: [-5,5]}
 interpolation: "Quintic"
 obstacle_inflation_ratio: 1.5

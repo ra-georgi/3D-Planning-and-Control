@@ -1,6 +1,8 @@
 from planners.planner import Planner
 import numpy as np
 import yaml
+from collections import defaultdict
+import heapq
 
 class Dijkstra_Planner(Planner):
 
@@ -19,11 +21,14 @@ class Dijkstra_Planner(Planner):
         self.obstacles =  self.sim_params["obstacles"]["static"]
         self.arm_length = self.sim_params["quadcopter"]["arm_length"]
 
+        self.neighbor_deltas = self.generate_delta_values()
+
 
     def calculate_trajectory(self): #-> str:
         """Calculate and return time parameterized Trajectory"""
 
         planner_waypoints = []
+        print("Starting Dijkstra for path planning")
 
         # Loop through consecutive pairs of waypoints
         for i in range(len(self.waypoints) - 1):
@@ -34,17 +39,56 @@ class Dijkstra_Planner(Planner):
             path = self.dijkstra_plan(start, goal)
             planner_waypoints.append(path)
         
-        return 
+        return planner_waypoints
     
     def dijkstra_plan(self, start_pos, goal_pos):
 
-        start_idx = self.points_to_index(start_pos) 
-        goal_idx  = self.points_to_index(goal_pos)
+        start_idx = self.point_to_index(start_pos) 
+        goal_idx  = self.point_to_index(goal_pos)
 
-        pass
+        cost_dict   = defaultdict(lambda: float("inf"))
+        cost_dict[start_idx] = 0.0          
+        parent_dict = {}
+
+        heap_list = []
+        tiebreaker_index = 0      # For creating deterministic paths
+        heapq.heappush(heap_list, (0.0, tiebreaker_index, start_idx))
+        visited_indices = set()
+
+        while heap_list:
+            current_cost, _, current_idx = heapq.heappop(heap_list)
+
+            if current_idx in visited_indices:
+                continue
+            visited_indices.add(current_idx)
+            # print("Found new node")
+
+            if current_idx == goal_idx:
+                print("Found goal, reconstructing path")
+                return self.construct_dijkstra_path(parent_dict, current_idx)
+            
+            for dx in self.neighbor_deltas:
+
+                neighbor_idx = (current_idx[0]+dx[0], 
+                                current_idx[1]+dx[1], 
+                                current_idx[2]+dx[2])
+                
+                if not self.check_point_validity(self.index_to_point(neighbor_idx)):
+                    continue
+
+                path_cost = self.path_cost(current_idx, neighbor_idx)  # Euclidean in grid (scaled by res)
+                potential_cost = current_cost + path_cost
+                if potential_cost < cost_dict[neighbor_idx]:
+                    cost_dict[neighbor_idx]   = potential_cost
+                    parent_dict[neighbor_idx] = current_idx
+                    tiebreaker_index += 1
+                    heapq.heappush(heap_list, (potential_cost, tiebreaker_index, neighbor_idx))
+                    
+        print("No path found with Dijkstra")
+        return []
 
 
-    def points_to_index(self, position):
+    def point_to_index(self, position):
         """Get grid index for point in space after checking if point is valid"""
 
         valid = self.check_point_validity(position)
@@ -57,7 +101,13 @@ class Dijkstra_Planner(Planner):
         iz = int(round((z - self.z_limits[0]) / self.voxel_resolution))
 
         return (ix, iy, iz)
-
+    
+    def index_to_point(self, index):
+        ix, iy, iz = index
+        x = self.x_limits[0] + (ix * self.voxel_resolution)
+        y = self.y_limits[0] + (iy * self.voxel_resolution)
+        z = self.z_limits[0] + (iz * self.voxel_resolution)
+        return (x, y, z)        
 
     def check_point_validity(self, position):
 
@@ -91,3 +141,38 @@ class Dijkstra_Planner(Planner):
                 return False
 
         return True
+    
+    def construct_dijkstra_path(self, parent_dict, current_idx):
+        path_idx_list = [current_idx]
+        while current_idx in parent_dict:
+            current_idx = parent_dict[current_idx]
+            path_idx_list.append(current_idx)
+        path_idx_list.reverse()
+
+        path_points = []
+        for i in path_idx_list:
+            path_points.append(self.index_to_point(i))
+
+        return path_points
+    
+    @staticmethod
+    def generate_delta_values():
+        # 26-connected
+        deltas = []
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for dz in (-1, 0, 1):
+                    if dx == dy == dz == 0:
+                        continue
+                    deltas.append((dx, dy, dz))
+        return deltas        
+
+    def path_cost(self, current_idx, neighbor_idx):
+        """ Returns cost as Euclidean distance between voxels in meters"""
+
+        dx = (neighbor_idx[0] - current_idx[0]) * self.voxel_resolution
+        dy = (neighbor_idx[1] - current_idx[1]) * self.voxel_resolution
+        dz = (neighbor_idx[2] - current_idx[2]) * self.voxel_resolution
+
+        return np.sqrt(dx*dx + dy*dy + dz*dz)
+
