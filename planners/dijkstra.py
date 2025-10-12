@@ -3,6 +3,7 @@ import numpy as np
 import yaml
 from collections import defaultdict
 import heapq
+from planners.interpolators.quintic_spline import Quintic_Spline_Interpolator
 
 class Dijkstra_Planner(Planner):
 
@@ -22,6 +23,7 @@ class Dijkstra_Planner(Planner):
         self.arm_length = self.sim_params["quadcopter"]["arm_length"]
 
         self.neighbor_deltas = self.generate_delta_values()
+        self.trajectory_generator = Quintic_Spline_Interpolator(cfg)
 
 
     def calculate_trajectory(self): #-> str:
@@ -39,6 +41,8 @@ class Dijkstra_Planner(Planner):
             path = self.dijkstra_plan(start, goal)
             planner_waypoints.append(path)
         
+        trajectory = self.trajectory_generator.interpolate_waypoints(planner_waypoints)
+
         return planner_waypoints
     
     def dijkstra_plan(self, start_pos, goal_pos):
