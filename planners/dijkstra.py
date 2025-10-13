@@ -43,7 +43,7 @@ class Dijkstra_Planner(Planner):
         
         trajectory = self.trajectory_generator.interpolate_waypoints(planner_waypoints)
 
-        return planner_waypoints
+        return planner_waypoints, self.trajectory_generator #To evaluate trajectories, feed to controller
     
     def dijkstra_plan(self, start_pos, goal_pos):
 
