@@ -4,7 +4,7 @@ class Quintic_Spline_Interpolator():
     
     def __init__(self,cfg):
         self.sim_params = cfg
-        self.waypoints =  self.sim_params["world"]["waypoints"]  #List of dictionaries
+        self.waypoints  = self.sim_params["world"]["waypoints"]  #List of dictionaries
 
     def interpolate_waypoints(self, planner_waypoints):
         knot_point_times, knot_velocities, knot_accelerations = self.prepare_knot_points(planner_waypoints)
@@ -68,8 +68,10 @@ class Quintic_Spline_Interpolator():
 
     def compute_splines(self, planner_waypoints, knot_point_times, knot_velocities, knot_accelerations):
         
+        trajectory = []
         for segment_num, segment in enumerate(planner_waypoints):
             for wp_num, waypoint in enumerate(segment):
+                trajectory_segment = {}
 
                 if wp_num == (len(segment)-1):
                     continue
@@ -85,9 +87,17 @@ class Quintic_Spline_Interpolator():
                 acc_x_init, acc_y_init, acc_z_init      = knot_accelerations[segment_num][wp_num]
                 acc_x_final, acc_y_final, acc_z_final   = knot_accelerations[segment_num][wp_num+1]
 
-                self.compute_spline_coefficients(x_initial,x_final,vx_initial,vx_final,acc_x_init,acc_x_final,t_initial,t_final)
-                self.compute_spline_coefficients(y_initial,y_final,vy_initial,vy_final,acc_y_init,acc_y_final,t_initial,t_final)
-                self.compute_spline_coefficients(z_initial,z_final,vz_initial,vz_final,acc_z_init,acc_z_final,t_initial,t_final)
+                trajectory_segment["t0"]    = t_initial
+                trajectory_segment["tf"]    = t_final
+                trajectory_segment["coeff"] = np.zeros((3,6))
+
+                trajectory_segment["coeff"][0,:] = self.compute_spline_coefficients(x_initial,x_final,vx_initial,vx_final,acc_x_init,acc_x_final,t_initial,t_final)
+                trajectory_segment["coeff"][1,:] = self.compute_spline_coefficients(y_initial,y_final,vy_initial,vy_final,acc_y_init,acc_y_final,t_initial,t_final)
+                trajectory_segment["coeff"][2,:] = self.compute_spline_coefficients(z_initial,z_final,vz_initial,vz_final,acc_z_init,acc_z_final,t_initial,t_final)
+
+                trajectory.append(trajectory_segment)
+
+        return trajectory
 
 
     def compute_spline_coefficients(self, p_i, p_f, v_i, v_f, a_i, a_f, t_i, t_f):
@@ -105,3 +115,51 @@ class Quintic_Spline_Interpolator():
         c5 = ((6*d0)/(T**5)) - ((3*d1)/(T**4)) + ((0.5*d2)/(T**3))
 
         return np.array([c0, c1, c2, c3, c4, c5])
+    
+    def evaluate_trajectory(self, time):
+
+        tau = -1
+        # Find which quintic polynomial corresponds to this time
+        for segment in self.trajectory:
+            if segment['t0'] <=  time < segment['tf']:
+                coeff = segment['coeff']
+                tau   = time - segment['t0']
+        # May not be necessary
+        if time == self.trajectory[-1]['tf']:
+            coeff = self.trajectory[-1]['coeff']
+            tau   = time - self.trajectory[-1]['t0']
+
+        if tau == -1:
+            # if t is outside the defined time range
+            print("Time outside trajectory time limits")
+            return None
+        else:
+            coeff_x = coeff[0,:]
+            coeff_y = coeff[1,:]
+            coeff_z = coeff[2,:]
+
+            pos = np.array([self.eval_poly(coeff_x, tau),
+                            self.eval_poly(coeff_y, tau),
+                            self.eval_poly(coeff_z, tau)])
+            vel = np.array([self.eval_der_poly(coeff_x, tau),
+                            self.eval_der_poly(coeff_y, tau),
+                            self.eval_der_poly(coeff_z, tau)])
+            acc = np.array([self.eval_2nd_der_poly(coeff_x, tau),
+                            self.eval_2nd_der_poly(coeff_y, tau),
+                            self.eval_2nd_der_poly(coeff_z, tau)])
+            
+            return pos, vel, acc
+
+
+
+    @staticmethod
+    def eval_poly(c, tau):
+        return (c[0] + c[1]*tau + c[2]*tau**2 + c[3]*tau**3 + c[4]*tau**4 + c[5]*tau**5)
+
+    @staticmethod
+    def eval_der_poly(c, tau):
+        return (c[1] + 2*c[2]*tau + 3*c[3]*tau**2 + 4*c[4]*tau**3 + 5*c[5]*tau**4)
+
+    @staticmethod
+    def eval_2nd_der_poly(c, tau):
+        return (2*c[2] + 6*c[3]*tau + 12*c[4]*tau**2 + 20*c[5]*tau**3)

@@ -15,7 +15,8 @@ planner    = Dijkstra_Planner(sim_cfg)
 controller = Hover_Controller(sim_cfg)
 simulator  = Simulator(sim_cfg)
 
-plan = planner.calculate_trajectory()
+trajectory, trajectory_object = planner.calculate_trajectory()
+print(trajectory_object.evaluate_trajectory(1.0))
 # print(plan)
 
 # times, states, controls = simulator.simulate(controller)

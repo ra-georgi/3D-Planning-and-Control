@@ -41,9 +41,10 @@ class Dijkstra_Planner(Planner):
             path = self.dijkstra_plan(start, goal)
             planner_waypoints.append(path)
         
+        print("Converting Dijkstra waypoints to trajectory")
         trajectory = self.trajectory_generator.interpolate_waypoints(planner_waypoints)
 
-        return planner_waypoints, self.trajectory_generator #To evaluate trajectories, feed to controller
+        return trajectory, self.trajectory_generator #To evaluate trajectories, feed to controller
     
     def dijkstra_plan(self, start_pos, goal_pos):
 
@@ -68,7 +69,6 @@ class Dijkstra_Planner(Planner):
             # print("Found new node")
 
             if current_idx == goal_idx:
-                print("Found goal, reconstructing path")
                 return self.construct_dijkstra_path(parent_dict, current_idx)
             
             for dx in self.neighbor_deltas:
