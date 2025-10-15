@@ -7,20 +7,22 @@ from planners.dijkstra import Dijkstra_Planner
 
 # Controllers
 from controllers.hover_controller import Hover_Controller
+from controllers.cascade_pid import Cascade_PID
 
 with open("config/default.yaml", "r") as f:
     sim_cfg = yaml.safe_load(f)
 
 planner    = Dijkstra_Planner(sim_cfg)
-controller = Hover_Controller(sim_cfg)
+# controller = Hover_Controller(sim_cfg)
+controller = Cascade_PID(sim_cfg)
 simulator  = Simulator(sim_cfg)
 
 trajectory, trajectory_object = planner.calculate_trajectory()
-print(trajectory_object.evaluate_trajectory(1.0))
-# print(plan)
+controller.set_trajectory(trajectory_object)
 
 # times, states, controls = simulator.simulate(controller)
 
 # visualizer = Visualizer(sim_cfg, times, states, controls)
 # # visualizer.plot_states()
+# TODO: add legend to animation
 # visualizer.animate_quadcopter()

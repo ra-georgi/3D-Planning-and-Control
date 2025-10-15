@@ -41,11 +41,10 @@ class Simulator():
             times[idx]      = t
             controls[:,idx-1] = u
 
+            #TODO: Check if crashed, integrate sensor noise, wind 
 
         return times, states, controls
         
-    # def take_step(self):
-    #     """ Simulate for a single time step"""
 
     def take_rk4_step(self, x_current, u):
         """ Numerical Integration with RK4 for a time step"""
@@ -116,7 +115,6 @@ class Simulator():
 
         return x_dot
 
- 
     def quaternion_multiply_left(self, q):
         """ Quaternion multiplication via left sided matrix multiplication """
 
@@ -130,7 +128,6 @@ class Simulator():
         ])
         return Lq
     
-
     @staticmethod
     def hat_operator(x):
             # Takes a vector and returns 3x3 skew symmetric matrix
