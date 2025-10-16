@@ -33,7 +33,6 @@ class Visualizer():
 
                 new_state[6:9,i] = rotation_matrix @ new_state[6:9,i]
 
-
                 eul = quaternion.as_euler('zyx', degrees=True)
                 new_state[3:6,i] = [eul[2],eul[1],eul[0]]
                 # roll_x, pitch_y, yaw_z = self.euler_from_quaternion(state[4,i], state[5,i], state[6,i], state[3,i])

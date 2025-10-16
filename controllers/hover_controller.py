@@ -10,7 +10,8 @@ class Hover_Controller(Controller):
         """Calculate and return control input"""
         m = self.sim_params["quadcopter"]["mass"]
         g = self.sim_params["constants"]["acc_gravity"]
-        u = (m*g)/4
+        kf = self.params["quadcopter"]["motor"]["kf"]
+        u = (1/kf)*(m*g)/4
         return u*np.ones((4))
         
 
