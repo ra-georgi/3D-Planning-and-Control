@@ -23,28 +23,45 @@ class Cascade_PID(Controller):
         self.outer_loop_time = 0
         self.inner_loop_time = 0
 
+        self.phi_des = 0
+        self.theta_des = 0
+
         self.sim_dt = self.sim_params["time"]["dt"]
         if (self.sim_dt > self.outer_loop_dt) or (self.sim_dt > self.inner_loop_dt):
               print("Warning: Simulation time step greater than PID inner/outer loop time step")
+        self.controller_dt = self.inner_loop_dt
 
- 
+
+        kf = self.sim_params["quadcopter"]["motor"]["kf"]
+        km = self.sim_params["quadcopter"]["motor"]["km"]
+        arm_length = self.sim_params["quadcopter"]["arm_length"]
+        self.motor_matrix = np.array([
+                [kf,                kf,            kf,                  kf],
+                [0,                 arm_length*kf, 0,                   -arm_length*kf],
+                [-arm_length*kf,    0,             arm_length*kf,       0],
+                [km,                -km,           km,                  -km]
+        ]) 
+
 
     def set_trajectory(self, trajectory):
         self.trajectory_object = trajectory
 
-    def calculate_control(self,x,t): #-> str:
+    def calculate_control(self,state,t): 
+
+        #TODO: Handle condition if time step does not belong to trajectory
         pos_des, vel_des, acc_des = self.trajectory_object.evaluate_trajectory(t)
-        u = self.position_controller(x, pos_des, vel_des, t)
+        if not isinstance(pos_des, np.ndarray):
+             pos_des = state[0:3]
+             vel_des = state[7:10]
 
-        # m = self.sim_params["quadcopter"]["mass"]
-        # g = self.sim_params["constants"]["acc_gravity"]
-        # u = (m*g)/4
-        # return u*np.ones((4))
+        u = self.position_controller(state, pos_des, vel_des, t)
+
+        return u
     
-    def position_controller(self, x, pos_des, vel_des, t):
+    def position_controller(self, state, pos_des, vel_des, t):
 
-        x, y, z    = x[0:3]
-        vx, vy, vz = x[7:10]
+        x, y, z    = state[0:3]
+        vx, vy, vz = state[7:10]
         x_des, y_des, z_des    = pos_des
         vx_des, vy_des, vz_des = vel_des
         
@@ -54,60 +71,63 @@ class Cascade_PID(Controller):
         if t >= self.outer_loop_time:
             self.outer_loop_time += self.outer_loop_dt
 
+            #TODO: Should this be inside or outside the loop?
             self.x_integral += self.sim_dt*(x_des-x)
             self.y_integral += self.sim_dt*(y-y_des)
-            phi_des= np.dot(y_gains,[y-y_des, self.y_integral, vy-vy_des])
-            if phi_des > 20:
-                    phi_des = 20
-            elif phi_des < -20:
-                    phi_des = -20
+            self.phi_des= np.dot(y_gains,[y-y_des, self.y_integral, vy-vy_des])
+            if self.phi_des > 20:
+                    self.phi_des = 20
+            elif self.phi_des < -20:
+                    self.phi_des = -20
 
-            theta_des = np.dot(x_gains,[x_des-x, self.x_integral, vx_des-vx])
-            if theta_des > 20:
-                    theta_des = 20
-            elif theta_des < -20:
-                    theta_des = -20
+            self.theta_des = np.dot(x_gains,[x_des-x, self.x_integral, vx_des-vx])
+            if self.theta_des > 20:
+                    self.theta_des = 20
+            elif self.theta_des < -20:
+                    self.theta_des = -20
 
             self.t_outer = 0
 
-        u = self.attitude_controller(x, phi_des, theta_des, t)
+        u = self.attitude_controller(state, t, z, vz, z_des, vz_des)
         return u
   
 
-    def attitude_controller(self, x, phi_des, theta_des, t):
+    def attitude_controller(self, state, t, z, vz, z_des, vz_des):
   
-        quaternion = R.from_quat(np.array(x[3:7]),scalar_first=True)
+        quaternion = R.from_quat(np.array(state[3:7]),scalar_first=True)
         eul = quaternion.as_euler('zyx', degrees=True)
 
         phi, theta, psi = [eul[2],eul[1],eul[0]]
+        ang_vel_x, ang_vel_y, ang_vel_z = state[10:]
 
         psi_des = 0 #TODO: reexamine this later
         ang_vel_x_des = ang_vel_y_des = ang_vel_z_des = 0   #TODO: reexamine this later
         # ang_vel_x, ang_vel_x_des = state[10], self.des_state[9,i]    #using omega from state is an approximation
 
-        ang_vel_x, ang_vel_y, ang_vel_z = x[10:]
+        #TODO: Should this be inside or outside the loop?
+        self.z_integral     += self.sim_dt*(z_des-z)
+        self.phi_integral   += self.sim_dt*(self.phi_des-phi)
+        self.theta_integral += self.sim_dt*(self.theta_des-theta)
+        self.psi_integral   += self.sim_dt*(psi_des-psi)
 
-    
-        z, z_des = state[2], self.des_state[2,i]
-        vz, vz_des = state[9], self.des_state[8,i]
+        z_gains     = [self.PID_Gains["outer_loop"]["proportional"]["z"], self.PID_Gains["outer_loop"]["integral"]["z"], self.PID_Gains["outer_loop"]["derivative"]["z"]]
 
-        self.z_integral += self.h*(z_des-z)
-        self.phi_integral += self.h*(phi_des-phi)
-        self.theta_integral += self.h*(theta_des-theta)
-        self.psi_integral += self.h*(psi_des-psi)
+        phi_gains   = [self.PID_Gains["inner_loop"]["proportional"]["phi"], self.PID_Gains["inner_loop"]["integral"]["phi"], self.PID_Gains["inner_loop"]["derivative"]["phi"]]
+        theta_gains = [self.PID_Gains["inner_loop"]["proportional"]["theta"], self.PID_Gains["inner_loop"]["integral"]["theta"], self.PID_Gains["inner_loop"]["derivative"]["theta"]]
+        psi_gains   = [self.PID_Gains["inner_loop"]["proportional"]["psi"], self.PID_Gains["inner_loop"]["integral"]["psi"], self.PID_Gains["inner_loop"]["derivative"]["psi"]]
 
-        T   = np.dot(self.PID_Gains[2,:],[z_des-z, self.z_integral, vz_des-vz])
-        M_x = np.dot(self.PID_Gains[3,:],[phi_des-phi, self.phi_integral, ang_vel_x_des-ang_vel_x])
-        M_y = np.dot(self.PID_Gains[4,:],[theta_des-theta, self.theta_integral, ang_vel_y_des-ang_vel_y])
-        M_z = np.dot(self.PID_Gains[5,:],[psi_des-psi, self.psi_integral, ang_vel_z_des-ang_vel_z])
+        T   = np.dot(z_gains,    [z_des-z, self.z_integral, vz_des-vz])
+        M_x = np.dot(phi_gains,  [self.phi_des-phi, self.phi_integral, ang_vel_x_des-ang_vel_x])
+        M_y = np.dot(theta_gains,[self.theta_des-theta, self.theta_integral, ang_vel_y_des-ang_vel_y])
+        M_z = np.dot(psi_gains,  [psi_des-psi, self.psi_integral, ang_vel_z_des-ang_vel_z])
 
         F_vec = np.array([T,M_x,M_y,M_z]).reshape(4,1)
-        x = np.linalg.solve(self.motor_matrix, F_vec)
+        u_diff = np.linalg.solve(self.motor_matrix, F_vec)
 
-        m = self.sim_params["quadcopter"]["mass"]
-        g = self.sim_params["constants"]["acc_gravity"]
-        kf = self.params["quadcopter"]["motor"]["kf"]
+        m =  self.sim_params["quadcopter"]["mass"]
+        g =  self.sim_params["constants"]["acc_gravity"]
+        kf = self.sim_params["quadcopter"]["motor"]["kf"]
         u_hover = ((1/kf)*(m*g)/4)*np.ones([4,1])       
 
-        u = u_hover + x
+        u = u_hover + u_diff
         return u.squeeze()

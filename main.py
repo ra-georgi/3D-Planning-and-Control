@@ -20,9 +20,9 @@ simulator  = Simulator(sim_cfg)
 trajectory, trajectory_object = planner.calculate_trajectory()
 controller.set_trajectory(trajectory_object)
 
-times, states, controls = simulator.simulate(controller)
+times, states, controls = simulator.simulate(controller, controller.controller_dt)
 
-# visualizer = Visualizer(sim_cfg, times, states, controls)
-# # visualizer.plot_states()
-# TODO: add legend to animation
-# visualizer.animate_quadcopter()
+visualizer = Visualizer(sim_cfg, times, states, controls)
+visualizer.plot_states()
+# #TODO: add legend to animation
+visualizer.animate_quadcopter()

@@ -10,7 +10,7 @@ class Simulator():
                         [np.eye(3)]
                         ])    
 
-    def simulate(self,controller): #-> str:
+    def simulate(self, controller, controller_dt): #-> str:
         """Simulate Quadcopter Flight"""
 
         dt = self.params["time"]["dt"]
@@ -24,18 +24,26 @@ class Simulator():
         times    = np.zeros([n_steps+1])
         controls = np.zeros([4, n_steps])
 
-        states[:, 0] = x0
+        states[:, 0]    = x0
+        controller_time = 0
 
         for idx in range(1,n_steps+1):
             x_current = states[:, idx-1]
             t  = idx * dt
-            u  = controller.calculate_control(x_current, t) 
+
+            if (t>=controller_time):
+                u  = controller.calculate_control(x_current, t) 
+                controller_time += controller_dt
+                # print(f"Time: {t}, Control Input given")
             
             if (t%1==0):
                 print(f"Time: {t}")
 
             #TODO: CLIP CONTROL TO RESPECT LIMITS
                 #####
+
+            print(f"x_current: {x_current}")
+            print(f"Time: {t}")
 
             states[:, idx]  = self.take_rk4_step(x_current,u)
             times[idx]      = t
@@ -45,7 +53,6 @@ class Simulator():
 
         return times, states, controls
         
-
     def take_rk4_step(self, x_current, u):
         """ Numerical Integration with RK4 for a time step"""
 
@@ -62,6 +69,7 @@ class Simulator():
         )
 
         #re-normalize quaternion 
+
         x[3:7] = x[3:7]/np.linalg.norm(x[3:7])
 
         return x
