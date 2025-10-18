@@ -9,6 +9,8 @@ class Simulator():
                         [np.zeros([1,3])],
                         [np.eye(3)]
                         ])    
+        self.actuator_limit = (self.params["quadcopter"]["limits"]["clip_factor"])*self.params["quadcopter"]["mass"]*self.params["constants"]["acc_gravity"]
+    
 
     def simulate(self, controller, controller_dt): #-> str:
         """Simulate Quadcopter Flight"""
@@ -39,10 +41,11 @@ class Simulator():
             if (t%1==0):
                 print(f"Time: {t}")
 
-            #TODO: CLIP CONTROL TO RESPECT LIMITS
-                #####
+            # Force actuator limits to be respected
+            u = np.clip(u, 0, self.actuator_limit)
 
-            print(f"x_current: {x_current}")
+            # print(f"x_current: {x_current}")
+            print(f"u: {u}")
             print(f"Time: {t}")
 
             states[:, idx]  = self.take_rk4_step(x_current,u)

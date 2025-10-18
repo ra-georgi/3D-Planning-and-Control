@@ -1,17 +1,28 @@
 type: "2-loop"              # "3-loop" To be implemented
 rates_hz:
-  inner_loop: 5
-  outer_loop: 1
+  inner_loop: 50
+  outer_loop: 10
 gains:
   outer_loop:
-    proportional: {x: 12.0,  y: 12.0, z: 4.0}
-    integral:     {x: 0.5,   y: 0.5,  z: 0.5}
-    derivative:   {x: 10.0,  y: 10.0, z: 2.0}
+    proportional: {x: 2.56278919e+01,  y: 2.56278919e+01, z: 2.57012684e+00}
+    integral:     {x: 0.0,   y: 0.0,  z: 0.0}
+    derivative:   {x: 1.28994728e+01,  y: 1.28994728e+01, z: 1.28994728e+01}
 
   inner_loop:
-    proportional: {phi: 0.5,  theta: 0.5,  psi: 0.0} 
-    integral:     {phi: 0.05, theta: 0.05, psi: 0.0} 
-    derivative:   {phi: 4.0,  theta: 4.0,  psi: 0.0} 
+    proportional: {phi: 3.74266832e-03,  theta: 3.74266832e-03,  psi: 4.98906794e-03} 
+    integral:     {phi: 0.0, theta: 0.0, psi: 0.0} 
+    derivative:   {phi: 3.20275599e-02,  theta: 3.20275599e-02,  psi: 5.01777145e-02} 
+
+# gains:
+#   outer_loop:
+#     proportional: {x: 12.0,  y: 12.0, z: 4.0}
+#     integral:     {x: 0.5,   y: 0.5,  z: 0.5}
+#     derivative:   {x: 10.0,  y: 10.0, z: 2.0}
+
+#   inner_loop:
+#     proportional: {phi: 0.5,  theta: 0.5,  psi: 0.0} 
+#     integral:     {phi: 0.05, theta: 0.05, psi: 0.0} 
+#     derivative:   {phi: 4.0,  theta: 4.0,  psi: 0.0} 
 
 # PID_Gains  = [[ 12,   0.5,  10],  # Kp_x, Ki_x, Kd_x 
 #               [ 12,   0.5,  10],  # y
@@ -19,3 +30,11 @@ gains:
 #               [0.5,  0.05,   4],  # phi
 #               [0.5,  0.05,   4],  # theta
 #               [  0,     0,   0]]  # psi
+
+
+# PID_Gains = [[2.56278919e+01, 0., 1.28994728e+01],
+#              [2.56278919e+01, 0., 1.28994728e+01],
+#              [2.57012684e+00, 0,  8.14091206e-01],
+#              [3.74266832e-03, 0.,         3.20275599e-02 ],
+#              [3.74266832e-03, 0.,         3.20275599e-02],
+#              [4.98906794e-03, 0.,         5.01777145e-02]]

@@ -10,7 +10,7 @@ quadcopter:
   arm_length: 0.175
   motor: {kf: 1, km: 0.0245}
   limits:
-    clip_factor: 10
+    clip_factor: 4   # Max control input represented as clip_factor*quad_weight
     # roll_pitch_rad: 0.6
     # yaw_rate: 3.5
     # thrust_total: [0.0, 18.0]
@@ -30,10 +30,10 @@ world:
                     0.0, 0.0, 0.0,             
                     0.0, 0.0, 0.0 ]} 
 
-    # - {t: 4.0,  pose: [2.0, 1.0, 3.0,
-    #                 1.0, 0.0, 0.0, 0.0,        
-    #                 0.0, 0.0, 0.0,             
-    #                 0.0, 0.0, 0.0 ]}           
+    - {t: 4.0,  pose: [2.0, 1.0, 3.0,
+                    1.0, 0.0, 0.0, 0.0,        
+                    0.0, 0.0, 0.0,             
+                    0.0, 0.0, 0.0 ]}           
     
 obstacles:
   static:

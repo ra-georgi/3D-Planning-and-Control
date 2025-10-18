@@ -42,17 +42,20 @@ class Cascade_PID(Controller):
                 [km,                -km,           km,                  -km]
         ]) 
 
+        m =  self.sim_params["quadcopter"]["mass"]
+        g =  self.sim_params["constants"]["acc_gravity"]
+        kf = self.sim_params["quadcopter"]["motor"]["kf"]
+        self.u_hover = ((1/kf)*(m*g)/4)*np.ones([4,1])            
+
 
     def set_trajectory(self, trajectory):
         self.trajectory_object = trajectory
 
     def calculate_control(self,state,t): 
 
-        #TODO: Handle condition if time step does not belong to trajectory
         pos_des, vel_des, acc_des = self.trajectory_object.evaluate_trajectory(t)
         if not isinstance(pos_des, np.ndarray):
-             pos_des = state[0:3]
-             vel_des = state[7:10]
+             return self.u_hover.squeeze()
 
         u = self.position_controller(state, pos_des, vel_des, t)
 
@@ -124,10 +127,5 @@ class Cascade_PID(Controller):
         F_vec = np.array([T,M_x,M_y,M_z]).reshape(4,1)
         u_diff = np.linalg.solve(self.motor_matrix, F_vec)
 
-        m =  self.sim_params["quadcopter"]["mass"]
-        g =  self.sim_params["constants"]["acc_gravity"]
-        kf = self.sim_params["quadcopter"]["motor"]["kf"]
-        u_hover = ((1/kf)*(m*g)/4)*np.ones([4,1])       
-
-        u = u_hover + u_diff
+        u = self.u_hover + u_diff
         return u.squeeze()
