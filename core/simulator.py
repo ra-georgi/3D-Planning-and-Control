@@ -10,7 +10,14 @@ class Simulator():
                         [np.eye(3)]
                         ])    
         self.actuator_limit = (self.params["quadcopter"]["limits"]["clip_factor"])*self.params["quadcopter"]["mass"]*self.params["constants"]["acc_gravity"]
-    
+
+        if (self.params["world"]["wind"]["active"] == "True"):
+            self.wind_sim     = True  
+            self.wind_vector  = np.array(self.params["world"]["wind"]["speed_vector"])
+            self.wind_std_dev = np.array(self.params["world"]["wind"]["std_deviation"])
+            self.Cd = self.params["world"]["wind"]["Cd"]
+            self.mass = self.params["quadcopter"]["mass"]
+            self.arm_length = self.params["quadcopter"]["arm_length"]
 
     def simulate(self, controller, controller_dt): #-> str:
         """Simulate Quadcopter Flight"""
@@ -114,6 +121,9 @@ class Simulator():
         x_dot[7:10] = ( (rotation_matrix.T) @ np.array([0,0,-g]) ) + ( (1/mass)*(u_matrix@u) )  
         - ( self.hat_operator(ang_velocity) @ velocity )
 
+        if self.wind_sim == True:
+            x_dot[7:10] -= self.wind_dynamics(rotation_matrix.T, velocity)
+
         torques_body_frame = np.array([
             arm_length*kf*(u[1]-u[3]),
             arm_length*kf*(u[2]-u[0]),
@@ -138,7 +148,19 @@ class Simulator():
                 [v, (s*np.eye(3))+self.hat_operator(v)]
         ])
         return Lq
-    
+
+
+    def wind_dynamics(self, rotation_matrix, velocity):
+
+        if (self.params["world"]["wind"]["type"] == "constant"):
+            rel_velocity = velocity - (rotation_matrix@self.wind_vector)
+        else:
+            rng = np.random.default_rng()
+            gaussian_wind_vec = rng.normal(loc=self.wind_vector, scale=self.wind_std_dev)
+            rel_velocity = velocity - (rotation_matrix@gaussian_wind_vec)
+
+        # Modelling wind force as 0.5*pho*Cd*A*v_rel^2 with area approximated as arm_length^2
+        return (1/self.mass)*(0.5*1.225*self.Cd)*(self.arm_length*self.arm_length)*np.square(rel_velocity)
     @staticmethod
     def hat_operator(x):
             # Takes a vector and returns 3x3 skew symmetric matrix
