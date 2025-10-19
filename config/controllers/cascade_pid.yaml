@@ -15,14 +15,14 @@ gains:
 
 # gains:
 #   outer_loop:
-#     proportional: {x: 12.0,  y: 12.0, z: 4.0}
-#     integral:     {x: 0.5,   y: 0.5,  z: 0.5}
-#     derivative:   {x: 10.0,  y: 10.0, z: 2.0}
+#     proportional: {x: 25.5112113,  y: 25.5112113, z: 4.39283609}
+#     integral:     {x: 0,   y: 0,  z: 0.05118788}
+#     derivative:   {x: 15.37343388,  y: 15.37343388, z: 1.35118532}
 
 #   inner_loop:
-#     proportional: {phi: 0.5,  theta: 0.5,  psi: 0.0} 
-#     integral:     {phi: 0.05, theta: 0.05, psi: 0.0} 
-#     derivative:   {phi: 4.0,  theta: 4.0,  psi: 0.0} 
+#     proportional: {phi: 0.76371426,  theta: 0.76371426,  psi: 0.76371426} 
+#     integral:     {phi: 0.0, theta: 0.0, psi: 0.0} 
+#     derivative:   {phi: 8.4853864,  theta: 48.4853864,  psi: 8.51397539} 
 
 # PID_Gains  = [[ 12,   0.5,  10],  # Kp_x, Ki_x, Kd_x 
 #               [ 12,   0.5,  10],  # y

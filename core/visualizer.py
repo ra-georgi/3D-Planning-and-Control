@@ -209,7 +209,7 @@ class Visualizer():
         self.arm2_start = np.array([0, l,0])
         self.arm2_end   = np.array([0,-l,0])
 
-        self.ani = FuncAnimation(fig=fig, func=self.update_anim_quad,frames=state.shape[1], fargs=(),interval=15)
+        self.ani = FuncAnimation(fig=fig, func=self.update_anim_quad,frames=state.shape[1], fargs=(),interval=10)
         plt.show()
 
     def update_anim_quad(self,frame):

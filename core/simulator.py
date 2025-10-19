@@ -52,7 +52,7 @@ class Simulator():
             times[idx]      = t
             controls[:,idx-1] = u
 
-            #TODO: Check if crashed, integrate sensor noise, wind 
+            #TODO: Check if crashed, integrate sensor noise, delay, wind 
 
         return times, states, controls
         
