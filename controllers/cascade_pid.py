@@ -48,6 +48,7 @@ class Cascade_PID(Controller):
 
         self.waypoints  = self.sim_params["world"]["waypoints"]          
 
+        self.controller_name = "Cascade PID"
 
     def set_trajectory(self, trajectory):
         self.trajectory_object = trajectory

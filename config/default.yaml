@@ -1,6 +1,7 @@
-time:
+time:                      # Assumptions: controller_dt ≥ sim_dt, input_delay = delay_time_step*dt, input_delay ≤ controller_dt
   dt: 0.01
   duration: 4.0
+  delay_time_step: 1       #input delay, represented as number of time steps after calculating control, to apply the control. Set to 0, for no input delay
 
 quadcopter:
   mass: 0.5
@@ -20,7 +21,7 @@ constants:
 
 world:
   waypoints:  #List of dictionaries
-    - {t: 0.0,  pose: [0.0, 0.0, 1.0,             # Position
+    - {t: 0.0,  pose: [0.0, 0.0, 1.0,          # Position
                     1.0, 0.0, 0.0, 0.0,        # Orientation (Quaternion -scalar first)
                     0.0, 0.0, 0.0,             # Velocity
                     0.0, 0.0, 0.0 ]}           # Angular Velocity
@@ -41,9 +42,9 @@ world:
                     0.0, 0.0, 0.0 ]}                             
   wind:
     active: "True"
-    type: "gaussian" #| "gaussian" | "constant"  #TODO: Try other wind models/variations 
+    type: "constant" #| "gaussian" | "constant"  #TODO: Try other wind models/variations 
     Cd: 1.0
-    speed_vector: [1, 0, 0]    #magnitude of this vector will be used for random setting
+    speed_vector: [1, 0, 0]    
     std_deviation: [0.05, 0.05, 0.05]
 
 obstacles:

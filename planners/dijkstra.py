@@ -24,7 +24,9 @@ class Dijkstra_Planner(Planner):
 
         self.neighbor_deltas = self.generate_delta_values()
         self.trajectory_generator = Quintic_Spline_Interpolator(cfg)
-
+        
+        self.planner_name = "Dijkstra"
+        self.interpolator_name = "Quintic Spline"
 
     def calculate_trajectory(self): #-> str:
         """Calculate and return time parameterized Trajectory"""

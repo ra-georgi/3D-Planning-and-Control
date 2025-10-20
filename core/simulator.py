@@ -24,6 +24,7 @@ class Simulator():
 
         dt = self.params["time"]["dt"]
         tf = self.params["time"]["duration"]
+        input_delay = dt * self.params["time"]["delay_time_step"]
         waypoints =  self.params["world"]["waypoints"]
 
         n_steps = int(tf/dt)
@@ -35,14 +36,20 @@ class Simulator():
 
         states[:, 0]    = x0
         controller_time = 0
+        u_calculated = False  # To prevent u_calc being recalculated for the entire window [controller_time, controller_time+input_delay)
 
         for idx in range(1,n_steps+1):
             x_current = states[:, idx-1]
             t  = idx * dt
 
-            if (t>=controller_time):
-                u  = controller.calculate_control(x_current, t) 
+            if (t>=controller_time) and (t <= (controller_time+input_delay) ):
+                if u_calculated == False:
+                    u_calc  = controller.calculate_control(x_current, t) 
+                    u_calculated = True
+            if (t >= (controller_time+input_delay) ) or (idx==1):
+                u = u_calc
                 controller_time += controller_dt
+                u_calculated = False
                 # print(f"Time: {t}, Control Input given")
             
             if (t%1==0):
@@ -52,14 +59,13 @@ class Simulator():
             u = np.clip(u, 0, self.actuator_limit)
 
             # print(f"x_current: {x_current}")
-            print(f"u: {u}")
-            print(f"Time: {t}")
+            # print(f"Time: {t}")
 
             states[:, idx]  = self.take_rk4_step(x_current,u)
             times[idx]      = t
             controls[:,idx-1] = u
 
-            #TODO: Check if crashed, integrate sensor noise, delay, wind 
+            #TODO: Check if crashed, integrate sensor noise
 
         return times, states, controls
         
@@ -67,12 +73,15 @@ class Simulator():
         """ Numerical Integration with RK4 for a time step"""
 
         dt = self.params["time"]["dt"]
+
+        if self.wind_sim == True:
+            wind_acc = self.wind_dynamics(x_current)   
         
         #RK4 integration with zero-order hold on u
-        k1 = self.quad_dynamics(x_current,u)
-        k2 = self.quad_dynamics(x_current + (0.5*dt*k1), u)
-        k3 = self.quad_dynamics(x_current + (0.5*dt*k2), u)
-        k4 = self.quad_dynamics(x_current + (dt*k3)    , u)
+        k1 = self.quad_dynamics(x_current,u, wind_acc)
+        k2 = self.quad_dynamics(x_current + (0.5*dt*k1), u, wind_acc)
+        k3 = self.quad_dynamics(x_current + (0.5*dt*k2), u, wind_acc)
+        k4 = self.quad_dynamics(x_current + (dt*k3)    , u, wind_acc)
 
         x = x_current + (
             (dt/6)*( k1 + (2*k2) + (2*k3) + k4  )
@@ -84,13 +93,14 @@ class Simulator():
 
         return x
 
-    def quad_dynamics(self, x_current, u):
+    def quad_dynamics(self, x_current, u, wind_acc):
         """Calculate x_dot based on equations of motion"""
         
         position     = x_current[0:3]
         orientation  = x_current[3:7]
         velocity     = x_current[7:10]
         ang_velocity = x_current[10:]
+        
 
         x_dot = np.zeros([13])
         rotation_matrix = R.from_quat(orientation,scalar_first=True).as_matrix()
@@ -122,7 +132,7 @@ class Simulator():
         - ( self.hat_operator(ang_velocity) @ velocity )
 
         if self.wind_sim == True:
-            x_dot[7:10] -= self.wind_dynamics(rotation_matrix.T, velocity)
+            x_dot[7:10] += wind_acc
 
         torques_body_frame = np.array([
             arm_length*kf*(u[1]-u[3]),
@@ -150,17 +160,21 @@ class Simulator():
         return Lq
 
 
-    def wind_dynamics(self, rotation_matrix, velocity):
+    def wind_dynamics(self, x_current):
+        orientation  = x_current[3:7]
+        velocity     = x_current[7:10]
+        rotation_matrix = R.from_quat(orientation,scalar_first=True).as_matrix()
 
         if (self.params["world"]["wind"]["type"] == "constant"):
-            rel_velocity = velocity - (rotation_matrix@self.wind_vector)
+            rel_velocity = velocity - (rotation_matrix.T@self.wind_vector)
         else:
             rng = np.random.default_rng()
             gaussian_wind_vec = rng.normal(loc=self.wind_vector, scale=self.wind_std_dev)
-            rel_velocity = velocity - (rotation_matrix@gaussian_wind_vec)
+            rel_velocity = velocity - (rotation_matrix.T@gaussian_wind_vec)
 
-        # Modelling wind force as 0.5*pho*Cd*A*v_rel^2 with area approximated as arm_length^2
-        return (1/self.mass)*(0.5*1.225*self.Cd)*(self.arm_length*self.arm_length)*np.square(rel_velocity)
+        # Modelling wind force as -0.5*pho*Cd*A*v_rel^2 with area approximated as arm_length^2
+        return (-1/self.mass)*(0.5*1.225*self.Cd)*(self.arm_length*self.arm_length)*rel_velocity*np.abs(rel_velocity)
+    
     @staticmethod
     def hat_operator(x):
             # Takes a vector and returns 3x3 skew symmetric matrix

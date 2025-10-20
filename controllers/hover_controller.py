@@ -9,6 +9,8 @@ class Hover_Controller(Controller):
         with open("config/controllers/hover.yaml", "r") as f:
             self.controller_params = yaml.safe_load(f)
         self.controller_dt = self.controller_params["rates_hz"]
+        self.controller_name = "Hover Controller"
+
 
     def calculate_control(self,x,t): #-> str:
         """Calculate and return control input"""
