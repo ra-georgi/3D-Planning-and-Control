@@ -167,7 +167,7 @@ class Visualizer():
 
 
         # --- RIGHT CARDS  ---------------------------------------------
-
+        #TODO: Swap legend and settings position
         # --- Left sidebar for Legend ---
         self.ax_legend = plt.axes([0.039, 0.01, 0.22, 0.98])
         self.ax_legend.axis('off')

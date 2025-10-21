@@ -57,7 +57,7 @@ class Cascade_PID(Controller):
 
         pos_des, vel_des, acc_des = self.trajectory_object.evaluate_trajectory(t)
         if not isinstance(pos_des, np.ndarray):
-            pos_des = self.waypoints[-1]["pose"][0:3]
+            pos_des = self.waypoints[-1]["pose"][0:3]        #TODO: Set to last waypoint requested based on timing
             vel_des = acc_des = [0,0,0]
             # return self.u_hover.squeeze()
 
