@@ -5,6 +5,13 @@ from collections import defaultdict
 import heapq
 from planners.interpolators.quintic_spline import Quintic_Spline_Interpolator
 
+class Node:
+    # __slots__ = ("pos", "parent")
+    def __init__(self, position, parent=None):
+        self.position =  position
+        self.parent   =  parent
+
+
 class RRTStar_Planner(Planner):
 
     def __init__(self, cfg):
@@ -17,6 +24,13 @@ class RRTStar_Planner(Planner):
         self.y_limits         = self.planner_params["grid"]["limits"]["y"]
         self.z_limits         = self.planner_params["grid"]["limits"]["z"]
         self.inflation_ratio  = self.planner_params["obstacle_inflation_ratio"]
+
+        # RRT hyper-parameters
+        self.propagation_distance_m   = self.planner_params["propagation_distance_m"]
+        self.max_itertions            = self.planner_params["max_itertions"]
+        self.goal_sample_rate         = self.planner_params["goal_sample_rate"]
+        self.goal_threshold_radius    = self.planner_params["goal_threshold_radius"]
+        self.collision_check_distance = self.planner_params["collision_check_distance"]
 
         self.waypoints =  self.sim_params["world"]["waypoints"]  #List of dictionaries
         self.obstacles =  self.sim_params["obstacles"]["static"]
@@ -50,106 +64,63 @@ class RRTStar_Planner(Planner):
     
     def rrt_star_plan(self, start_pos, goal_pos):
 
-        start_idx = self.point_to_index(start_pos) 
-        goal_idx  = self.point_to_index(goal_pos)
+        if (not self.check_point_validity(start_pos)) or (not self.check_point_validity(goal_pos)):
+            print("Start or goal is invalid/outside bounds or in collision.")
+            return []
 
-        cost_dict   = defaultdict(lambda: float("inf"))
-        cost_dict[start_idx] = 0.0          
-        parent_dict = {}
+        nodes = [Node(start_pos, parent=None)]
+        goal_pos = np.asarray(goal_pos, dtype=float)
 
-        heap_list = []
-        tiebreaker_index = 0      # For creating deterministic paths
-        start_heuristic_cost = self.heuristic_cost(start_idx, goal_idx)
-        # Use heuristic cost + path cost in heap to explore the most promising (least expensive) nodes
-        heapq.heappush(heap_list, (0.0+start_heuristic_cost, tiebreaker_index, start_idx))
-        visited_indices = set()
+        for iteration in range(self.max_iters):
+            sampled_position = self.sample_space(goal_pos)
 
-        while heap_list:
-            current_cost, _, current_idx = heapq.heappop(heap_list)
-
-            if current_idx in visited_indices:
-                continue
-            visited_indices.add(current_idx)
-
-            if current_idx == goal_idx:
-                return self.construct_astar_path(parent_dict, current_idx)
-            
-            for dx in self.neighbor_deltas:
-
-                neighbor_idx = (current_idx[0]+dx[0], 
-                                current_idx[1]+dx[1], 
-                                current_idx[2]+dx[2])
-                
-                if not self.check_point_validity(self.index_to_point(neighbor_idx)):
-                    continue
-
-                path_cost = self.path_cost(current_idx, neighbor_idx)  # Euclidean in grid (scaled by res)
-                potential_cost = current_cost + path_cost
-                if potential_cost < cost_dict[neighbor_idx]:
-                    cost_dict[neighbor_idx]   = potential_cost
-                    parent_dict[neighbor_idx] = current_idx
-                    tiebreaker_index += 1
-                    heuristic_cost = self.heuristic_cost(neighbor_idx, goal_idx)
-                    heapq.heappush(heap_list, (potential_cost + heuristic_cost, tiebreaker_index, neighbor_idx))
-                    
         print("No path found with RRT*")
         return []
 
 
-    # def point_to_index(self, position):
-    #     """Get grid index for point in space after checking if point is valid"""
+    def check_point_validity(self, position):
 
-    #     valid = self.check_point_validity(position)
-    #     if not valid:
-    #         return []
+        position =  np.array(position)
 
-    #     x, y, z = position
-    #     ix = int(round((x - self.x_limits[0]) / self.voxel_resolution))
-    #     iy = int(round((y - self.y_limits[0]) / self.voxel_resolution))
-    #     iz = int(round((z - self.z_limits[0]) / self.voxel_resolution))
+        # Check if point is within planner bounds
+        bounds = np.array([
+            self.x_limits,   # x bounds
+            self.y_limits,   # y bounds
+            self.z_limits    # z bounds
+        ])
+        inside = np.all((position >= bounds[:,0]) & (position <= bounds[:,1]))   
 
-    #     return (ix, iy, iz)
-    
-    # def index_to_point(self, index):
-    #     ix, iy, iz = index
-    #     x = self.x_limits[0] + (ix * self.voxel_resolution)
-    #     y = self.y_limits[0] + (iy * self.voxel_resolution)
-    #     z = self.z_limits[0] + (iz * self.voxel_resolution)
-    #     return (x, y, z)        
+        if (not inside):
+            print("Waypoint outside bounds, aborting ...")
+            return False
 
-    # def check_point_validity(self, position):
+        # Check if point does not lead to collision
+        for obstacle in self.obstacles:
+            radius_obstacle   = obstacle["radius"]
+            position_obstacle = obstacle["pose"]
 
-    #     position =  np.array(position)
+            x, y, z = position
+            cx, cy, cz = position_obstacle
 
-    #     # Check if point is within planner bounds
-    #     bounds = np.array([
-    #         self.x_limits,   # x bounds
-    #         self.y_limits,   # y bounds
-    #         self.z_limits    # z bounds
-    #     ])
-    #     inside = np.all((position >= bounds[:,0]) & (position <= bounds[:,1]))   
+            distance = (x-cx)**2 + (y-cy)**2 + (z-cz)**2
+            # Collision sphere radius is increased by inflation_ratio * length of quadcopter arm
+            inflated_radius = radius_obstacle + (self.inflation_ratio*self.arm_length)
 
-    #     if (not inside):
-    #         print("Waypoint outside bounds, aborting ...")
-    #         return False
+            if distance <= inflated_radius*inflated_radius:
+                return False
 
-    #     # Check if point does not lead to collision
-    #     for obstacle in self.obstacles:
-    #         radius_obstacle   = obstacle["radius"]
-    #         position_obstacle = obstacle["pose"]
+        return True
 
-    #         x, y, z = position
-    #         cx, cy, cz = position_obstacle
+    def sample_space(self, goal_pos):
+        # if np.random.rand() < self.goal_sample_rate:
+        #     return goal_pos.copy()
+        # # uniform in bounds
+        # x = np.random.uniform(self.x_limits[0], self.x_limits[1])
+        # y = np.random.uniform(self.y_limits[0], self.y_limits[1])
+        # z = np.random.uniform(self.z_limits[0], self.z_limits[1])
+        # return np.array([x, y, z], dtype=float)        
 
-    #         distance = (x-cx)**2 + (y-cy)**2 + (z-cz)**2
-    #         # Collision sphere radius is increased by inflation_ratio * length of quadcopter arm
-    #         inflated_radius = radius_obstacle + (self.inflation_ratio*self.arm_length)
 
-    #         if distance <= inflated_radius*inflated_radius:
-    #             return False
-
-    #     return True
-    
     # def construct_astar_path(self, parent_dict, current_idx):
     #     path_idx_list = [current_idx]
     #     while current_idx in parent_dict:
@@ -184,11 +155,34 @@ class RRTStar_Planner(Planner):
 
     #     return np.sqrt(dx*dx + dy*dy + dz*dz)
 
-    # def heuristic_cost(self, current_idx, goal_idx):
-        """ Same as path cost but separate function just to differentiate use"""
+    # # def heuristic_cost(self, current_idx, goal_idx):
+    #     """ Same as path cost but separate function just to differentiate use"""
 
-        dx = (goal_idx[0] - current_idx[0]) * self.voxel_resolution
-        dy = (goal_idx[1] - current_idx[1]) * self.voxel_resolution
-        dz = (goal_idx[2] - current_idx[2]) * self.voxel_resolution
+    #     dx = (goal_idx[0] - current_idx[0]) * self.voxel_resolution
+    #     dy = (goal_idx[1] - current_idx[1]) * self.voxel_resolution
+    #     dz = (goal_idx[2] - current_idx[2]) * self.voxel_resolution
 
-        return np.sqrt(dx*dx + dy*dy + dz*dz)
+    #     return np.sqrt(dx*dx + dy*dy + dz*dz)
+    
+
+
+    # def point_to_index(self, position):
+    #     """Get grid index for point in space after checking if point is valid"""
+
+    #     valid = self.check_point_validity(position)
+    #     if not valid:
+    #         return []
+
+    #     x, y, z = position
+    #     ix = int(round((x - self.x_limits[0]) / self.voxel_resolution))
+    #     iy = int(round((y - self.y_limits[0]) / self.voxel_resolution))
+    #     iz = int(round((z - self.z_limits[0]) / self.voxel_resolution))
+
+    #     return (ix, iy, iz)
+    
+    # def index_to_point(self, index):
+    #     ix, iy, iz = index
+    #     x = self.x_limits[0] + (ix * self.voxel_resolution)
+    #     y = self.y_limits[0] + (iy * self.voxel_resolution)
+    #     z = self.z_limits[0] + (iz * self.voxel_resolution)
+    #     return (x, y, z)        

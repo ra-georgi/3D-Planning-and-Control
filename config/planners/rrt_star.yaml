@@ -4,4 +4,9 @@ grid:
   limits: {x: [-5,5], y: [-5,5], z: [-5,5]}
 interpolation: "Quintic"
 obstacle_inflation_ratio: 1.5
+propagation_distance_m: 0.5
+max_itertions: 5000
+goal_sample_rate: 0.15
+goal_threshold_radius: 0.3
+collision_segment_distance: 0.05
 
