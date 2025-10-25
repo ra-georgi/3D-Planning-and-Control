@@ -30,13 +30,12 @@ class RRTStar_Planner(Planner):
         self.max_itertions            = self.planner_params["max_itertions"]
         self.goal_sample_rate         = self.planner_params["goal_sample_rate"]
         self.goal_threshold_radius    = self.planner_params["goal_threshold_radius"]
-        self.collision_check_distance = self.planner_params["collision_check_distance"]
+        self.collision_check_distance = self.planner_params["collision_segment_distance"]
 
         self.waypoints =  self.sim_params["world"]["waypoints"]  #List of dictionaries
         self.obstacles =  self.sim_params["obstacles"]["static"]
         self.arm_length = self.sim_params["quadcopter"]["arm_length"]
 
-        self.neighbor_deltas = self.generate_delta_values()
         self.trajectory_generator = Quintic_Spline_Interpolator(cfg)
         
         self.planner_name = "RRT-Star"
@@ -67,13 +66,39 @@ class RRTStar_Planner(Planner):
         if (not self.check_point_validity(start_pos)) or (not self.check_point_validity(goal_pos)):
             print("Start or goal is invalid/outside bounds or in collision.")
             return []
+        
+        start_pos = np.asarray(start_pos, dtype=float)
+        goal_pos  = np.asarray(goal_pos, dtype=float)
+        nodes = [Node(start_pos, None)]
 
-        nodes = [Node(start_pos, parent=None)]
-        goal_pos = np.asarray(goal_pos, dtype=float)
 
-        for iteration in range(self.max_iters):
-            sampled_position = self.sample_space(goal_pos)
+        for iteration in range(self.max_itertions):
+            sampled_position      = self.sample_space(goal_pos)
+            idx_nearest           = self.find_nearest_node(nodes, sampled_position)
+            nearest_node_position = nodes[idx_nearest].position
+            new_position          = self.get_new_node_position(nearest_node_position, sampled_position)
+            
+            if (new_position is None) or (not self.check_segment_free(nearest_node_position, new_position)):
+                continue
 
+            nodes.append(Node(new_position, idx_nearest))
+
+            # Check goal reached
+            if np.linalg.norm(new_position - goal_pos) <= self.goal_threshold_radius:
+                # Try to connect straight to goal
+                if self.check_segment_free(new_position, goal_pos):
+                    nodes.append(Node(goal_pos, parent=len(nodes)-1))
+                    return self.construct_rrt_star_path(nodes, len(nodes)-1)
+                else:
+                    pass
+
+
+        # If exact goal not reached, pick best near-goal node and try to connect once
+        best_idx = np.argmin([np.linalg.norm(n.position - goal_pos) for n in nodes])
+        if self.check_segment_free(nodes[best_idx].position, goal_pos):
+            nodes.append(Node(goal_pos, parent=best_idx))
+            return self.construct_rrt_star_path(nodes, len(nodes)-1)
+              
         print("No path found with RRT*")
         return []
 
@@ -112,39 +137,63 @@ class RRTStar_Planner(Planner):
         return True
 
     def sample_space(self, goal_pos):
-        # if np.random.rand() < self.goal_sample_rate:
-        #     return goal_pos.copy()
-        # # uniform in bounds
-        # x = np.random.uniform(self.x_limits[0], self.x_limits[1])
-        # y = np.random.uniform(self.y_limits[0], self.y_limits[1])
-        # z = np.random.uniform(self.z_limits[0], self.z_limits[1])
-        # return np.array([x, y, z], dtype=float)        
+        if np.random.rand() < self.goal_sample_rate:
+            return goal_pos.copy()
+        # uniform in bounds
+        x = np.random.uniform(self.x_limits[0], self.x_limits[1])
+        y = np.random.uniform(self.y_limits[0], self.y_limits[1])
+        z = np.random.uniform(self.z_limits[0], self.z_limits[1])
+        return np.array([x, y, z], dtype=float)        
 
 
-    # def construct_astar_path(self, parent_dict, current_idx):
-    #     path_idx_list = [current_idx]
-    #     while current_idx in parent_dict:
-    #         current_idx = parent_dict[current_idx]
-    #         path_idx_list.append(current_idx)
-    #     path_idx_list.reverse()
+    def find_nearest_node(self, nodes, sampled_position):
+        distances = [np.linalg.norm(node.position-sampled_position) for node in nodes ]
+        return np.argmin(distances)
 
-    #     path_points = []
-    #     for i in path_idx_list:
-    #         path_points.append(self.index_to_point(i))
+    def get_new_node_position(self, nearest_node_position, sampled_position):
+        direction = sampled_position - nearest_node_position
+        distance  = np.linalg.norm(direction)
 
-    #     return path_points
+        if distance < self.collision_check_distance: 
+            return None
+
+        unit_vector = direction/np.linalg.norm(direction)
+
+        if distance > self.propagation_distance_m:
+            step_size = self.propagation_distance_m
+        else:
+            step_size = distance
+
+        return nearest_node_position + (step_size*unit_vector)
+
+    def check_segment_free(self, nearest_node_position, new_position):
+
+        if (not self.check_point_validity(nearest_node_position)) or (not self.check_point_validity(new_position)):
+            return False
+        
+        direction = new_position - nearest_node_position
+        distance = np.linalg.norm(direction)
+
+        n_steps = max(2,int(np.ceil(distance / self.collision_check_distance)))
+
+        for i in range(n_steps + 1):
+            alpha = i / n_steps
+            p = nearest_node_position + (alpha * direction)
+            if not self.check_point_validity(p):
+                return False
+        return True        
+
+    def construct_rrt_star_path(self, nodes, goal_idx):
+        path = []
+        current_idx = goal_idx
+        while current_idx is not None:
+            path.append(tuple(nodes[current_idx].position))
+            current_idx = nodes[current_idx].parent
+        path.reverse()
+
+        return path
     
-    # @staticmethod
-    # def generate_delta_values():
-    #     # 26-connected
-    #     deltas = []
-    #     for dx in (-1, 0, 1):
-    #         for dy in (-1, 0, 1):
-    #             for dz in (-1, 0, 1):
-    #                 if dx == dy == dz == 0:
-    #                     continue
-    #                 deltas.append((dx, dy, dz))
-    #     return deltas        
+   
 
     # def path_cost(self, current_idx, neighbor_idx):
     #     """ Returns cost as Euclidean distance between voxels in meters"""

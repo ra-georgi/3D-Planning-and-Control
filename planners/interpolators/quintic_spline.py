@@ -2,6 +2,7 @@ import numpy as np
 
 class Quintic_Spline_Interpolator():
     
+    #TODO: Recheck accelerations for intermediate planner waypoints, allow non zero accleration at these points
     def __init__(self,cfg):
         self.sim_params = cfg
         self.waypoints  = self.sim_params["world"]["waypoints"]  #List of dictionaries
