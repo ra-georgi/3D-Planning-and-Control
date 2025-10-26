@@ -1,15 +1,14 @@
 from planners.planner import Planner
 import numpy as np
 import yaml
-from collections import defaultdict
-import heapq
 from planners.interpolators.quintic_spline import Quintic_Spline_Interpolator
 
 class Node:
-    # __slots__ = ("pos", "parent")
-    def __init__(self, position, parent=None):
-        self.position =  position
-        self.parent   =  parent
+    # __slots__ = ("position", "parent", "cost")
+    def __init__(self, position, parent=None, cost=np.inf):
+        self.position =  position # parent index in nodes
+        self.parent   =  parent 
+        self.cost     =  cost
 
 
 class RRTStar_Planner(Planner):
@@ -27,7 +26,7 @@ class RRTStar_Planner(Planner):
 
         # RRT hyper-parameters
         self.propagation_distance_m   = self.planner_params["propagation_distance_m"]
-        self.max_itertions            = self.planner_params["max_itertions"]
+        self.max_iterations            = self.planner_params["max_iterations"]
         self.goal_sample_rate         = self.planner_params["goal_sample_rate"]
         self.goal_threshold_radius    = self.planner_params["goal_threshold_radius"]
         self.collision_check_distance = self.planner_params["collision_segment_distance"]
@@ -38,8 +37,10 @@ class RRTStar_Planner(Planner):
 
         self.trajectory_generator = Quintic_Spline_Interpolator(cfg)
         
-        self.planner_name = "RRT-Star"
+        self.planner_name = "RRT*"
         self.interpolator_name = "Quintic Spline"
+
+        self.gamma = self.calculate_gamma()
 
     def calculate_trajectory(self): #-> str:
         """Calculate and return time parameterized Trajectory"""
@@ -69,10 +70,12 @@ class RRTStar_Planner(Planner):
         
         start_pos = np.asarray(start_pos, dtype=float)
         goal_pos  = np.asarray(goal_pos, dtype=float)
-        nodes = [Node(start_pos, None)]
+        nodes = [Node(start_pos, None, 0.0)]
 
+        best_goal_idx = None
+        best_goal_cost = np.inf
 
-        for iteration in range(self.max_itertions):
+        for iteration in range(self.max_iterations):
             sampled_position      = self.sample_space(goal_pos)
             idx_nearest           = self.find_nearest_node(nodes, sampled_position)
             nearest_node_position = nodes[idx_nearest].position
@@ -81,22 +84,55 @@ class RRTStar_Planner(Planner):
             if (new_position is None) or (not self.check_segment_free(nearest_node_position, new_position)):
                 continue
 
-            nodes.append(Node(new_position, idx_nearest))
+            # Choose best parent among neighbors
+            neighbor_indices = self.get_neighbors(nodes, new_position)
+            new_node_cost    = nodes[idx_nearest].cost + np.linalg.norm(new_position - nodes[idx_nearest].position)
+            new_node_parent  = idx_nearest
+
+            for j in neighbor_indices:
+                if self.check_segment_free(nodes[j].position, new_position):
+                    candidate_cost = nodes[j].cost + np.linalg.norm(new_position - nodes[j].position)
+                    if candidate_cost < new_node_cost:
+                        new_node_cost = candidate_cost
+                        new_node_parent = j
+
+            nodes.append(Node(new_position, new_node_parent, new_node_cost))
+            new_node_idx = len(nodes) - 1
+
+            # Rewire neighbors through the new node if beneficial
+            for j in neighbor_indices:
+                if j == new_node_parent:
+                    continue
+                if self.check_segment_free(nodes[new_node_idx].position, nodes[j].position):
+                    new_cost = nodes[new_node_idx].cost + np.linalg.norm(nodes[j].position - nodes[new_node_idx].position)
+                    if new_cost < nodes[j].cost:
+                        nodes[j].parent = new_node_idx
+                        nodes[j].cost   = new_cost
+
 
             # Check goal reached
             if np.linalg.norm(new_position - goal_pos) <= self.goal_threshold_radius:
                 # Try to connect straight to goal
                 if self.check_segment_free(new_position, goal_pos):
-                    nodes.append(Node(goal_pos, parent=len(nodes)-1))
-                    return self.construct_rrt_star_path(nodes, len(nodes)-1)
-                else:
-                    pass
+                    goal_cost = nodes[new_node_idx].cost + np.linalg.norm(goal_pos - nodes[new_node_idx].position)
+                    if goal_cost < best_goal_cost:
+                        nodes.append(Node(goal_pos, new_node_idx, goal_cost))
+                        best_goal_idx = len(nodes) - 1
+                        best_goal_cost = goal_cost
+                        # For early exit
+                        # return self.construct_rrt_star_path(nodes, len(nodes)-1)
 
+
+        if best_goal_idx is not None:
+            return self.construct_rrt_star_path(nodes, best_goal_idx)
 
         # If exact goal not reached, pick best near-goal node and try to connect once
+        # TODO: But what about the case where this node is very far from goal? How would it affect interpolation for trajectory
         best_idx = np.argmin([np.linalg.norm(n.position - goal_pos) for n in nodes])
         if self.check_segment_free(nodes[best_idx].position, goal_pos):
-            nodes.append(Node(goal_pos, parent=best_idx))
+            nodes.append(Node(goal_pos, parent=best_idx, 
+                              cost=nodes[best_idx].cost + np.linalg.norm(goal_pos - nodes[best_idx].position)
+                              ))
             return self.construct_rrt_star_path(nodes, len(nodes)-1)
               
         print("No path found with RRT*")
@@ -154,7 +190,7 @@ class RRTStar_Planner(Planner):
         direction = sampled_position - nearest_node_position
         distance  = np.linalg.norm(direction)
 
-        if distance < self.collision_check_distance: 
+        if distance == 0.0: 
             return None
 
         unit_vector = direction/np.linalg.norm(direction)
@@ -193,45 +229,37 @@ class RRTStar_Planner(Planner):
 
         return path
     
-   
+    def get_neighbors(self, nodes, new_position):
+    # Implementing as per https://in.mathworks.com/help/nav/ug/calculating-appropriate-ball-radius-constant-for-plannerrrtstar.html
+        N = max(1, len(nodes))
+        d = 3  # 3D
 
-    # def path_cost(self, current_idx, neighbor_idx):
-    #     """ Returns cost as Euclidean distance between voxels in meters"""
+        radius_ball = min(self.propagation_distance_m, 
+                        (self.gamma * (np.log(N + 1) / (N + 1))) ** (1.0 / d)  
+                        )
+        
+        idx = []
+        for i, node in enumerate(nodes):
+            if np.linalg.norm(node.position - new_position) <= radius_ball:
+                idx.append(i)
+        return idx
 
-    #     dx = (neighbor_idx[0] - current_idx[0]) * self.voxel_resolution
-    #     dy = (neighbor_idx[1] - current_idx[1]) * self.voxel_resolution
-    #     dz = (neighbor_idx[2] - current_idx[2]) * self.voxel_resolution
+    def calculate_gamma(self):
+        
+        V_unit_ball = (4/3)*(np.pi)
+        Lx = self.x_limits[1]-self.x_limits[0]
+        Ly = self.y_limits[1]-self.y_limits[0]
+        Lz = self.z_limits[1]-self.z_limits[0]
 
-    #     return np.sqrt(dx*dx + dy*dy + dz*dz)
+        total_volume    = Lx * Ly * Lz
+        obstacle_volume = 0
 
-    # # def heuristic_cost(self, current_idx, goal_idx):
-    #     """ Same as path cost but separate function just to differentiate use"""
+        for obstacle in self.obstacles:
+            radius_obstacle   = obstacle["radius"]
+            # Collision sphere radius is increased by inflation_ratio * length of quadcopter arm
+            inflated_radius =  radius_obstacle + (self.inflation_ratio*self.arm_length)
+            obstacle_volume += (4/3)*(np.pi)*(inflated_radius**3)
 
-    #     dx = (goal_idx[0] - current_idx[0]) * self.voxel_resolution
-    #     dy = (goal_idx[1] - current_idx[1]) * self.voxel_resolution
-    #     dz = (goal_idx[2] - current_idx[2]) * self.voxel_resolution
-
-    #     return np.sqrt(dx*dx + dy*dy + dz*dz)
-    
-
-
-    # def point_to_index(self, position):
-    #     """Get grid index for point in space after checking if point is valid"""
-
-    #     valid = self.check_point_validity(position)
-    #     if not valid:
-    #         return []
-
-    #     x, y, z = position
-    #     ix = int(round((x - self.x_limits[0]) / self.voxel_resolution))
-    #     iy = int(round((y - self.y_limits[0]) / self.voxel_resolution))
-    #     iz = int(round((z - self.z_limits[0]) / self.voxel_resolution))
-
-    #     return (ix, iy, iz)
-    
-    # def index_to_point(self, index):
-    #     ix, iy, iz = index
-    #     x = self.x_limits[0] + (ix * self.voxel_resolution)
-    #     y = self.y_limits[0] + (iy * self.voxel_resolution)
-    #     z = self.z_limits[0] + (iz * self.voxel_resolution)
-    #     return (x, y, z)        
+        V_free = total_volume - obstacle_volume
+        dim = 3
+        return (2.0 ** dim) * (1.0 + (1.0 / dim)) * (V_free / V_unit_ball)
