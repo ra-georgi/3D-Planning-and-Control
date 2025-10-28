@@ -41,7 +41,7 @@ world:
     #                 0.0, 0.0, 0.0,             
     #                 0.0, 0.0, 0.0 ]}                             
   wind:
-    active: "True"
+    active: "False"  # |  "True"
     type: "constant" #| "gaussian" | "constant"  #TODO: Try other wind models/variations 
     Cd: 1.0
     speed_vector: [1, 0, 0]    
