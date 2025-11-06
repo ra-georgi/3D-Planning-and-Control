@@ -2,4 +2,4 @@ rates_hz: 5
 state_cost_multiplier: 1
 terminal_state_cost_multiplier: 1
 control_cost_multiplier: 0.1
-orientation_cost_multiplier: 0.1  # keeping this value low as current trajectory does not provide orientation to track
+orientation_cost_multiplier: 0.1  # keeping this value low as current trajectory does not provide inaccurate orientation to track
