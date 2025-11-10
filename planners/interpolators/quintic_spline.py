@@ -152,6 +152,36 @@ class Quintic_Spline_Interpolator():
             return pos, vel, acc
 
 
+    def evaluate_jerk_snap(self, time):
+
+        tau = -1
+        # Find which quintic polynomial corresponds to this time
+        for segment in self.trajectory:
+            if segment['t0'] <=  time < segment['tf']:
+                coeff = segment['coeff']
+                tau   = time - segment['t0']
+        # May not be necessary
+        if time == self.trajectory[-1]['tf']:
+            coeff = self.trajectory[-1]['coeff']
+            tau   = time - self.trajectory[-1]['t0']
+
+        if tau == -1:
+            # if t is outside the defined time range
+            print("Time outside trajectory time limits")
+            return None, None, None
+        else:
+            coeff_x = coeff[0,:]
+            coeff_y = coeff[1,:]
+            coeff_z = coeff[2,:]
+
+            jerk = np.array([self.eval_3rd_der_poly(coeff_x, tau),
+                             self.eval_3rd_der_poly(coeff_y, tau),
+                             self.eval_3rd_der_poly(coeff_z, tau)])
+            snap = np.array([self.eval_4th_der_poly(coeff_x, tau),
+                             self.eval_4th_der_poly(coeff_y, tau),
+                             self.eval_4th_der_poly(coeff_z, tau)])       
+
+            return jerk, snap
 
     @staticmethod
     def eval_poly(c, tau):
@@ -164,3 +194,11 @@ class Quintic_Spline_Interpolator():
     @staticmethod
     def eval_2nd_der_poly(c, tau):
         return (2*c[2] + 6*c[3]*tau + 12*c[4]*tau**2 + 20*c[5]*tau**3)
+    
+    @staticmethod
+    def eval_3rd_der_poly(c, tau):
+        return (6*c[3] + 24*c[4]*tau + 60*c[5]*tau**2)
+    
+    @staticmethod
+    def eval_4th_der_poly(c, tau):
+        return (24*c[4] + 120*c[5]*tau)
