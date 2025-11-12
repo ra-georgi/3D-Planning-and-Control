@@ -4,7 +4,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 from scipy.linalg import block_diag
 import jax
-
+import jax.numpy as jnp
 
 class LQR_Controller(Controller):
 
@@ -33,6 +33,12 @@ class LQR_Controller(Controller):
         self.kf =         self.sim_params["quadcopter"]["motor"]["kf"]
         self.km =         self.sim_params["quadcopter"]["motor"]["km"]
         self.g =          self.sim_params["constants"]["acc_gravity"]
+        self.dt =         self.sim_params["time"]["dt"]
+
+        self.pad_matrix = jnp.block([
+                        [jnp.zeros([1,3])],
+                        [jnp.eye(3)]
+                        ])  
 
 
     def calculate_control(self,state,t): 
@@ -69,10 +75,10 @@ class LQR_Controller(Controller):
             #TODO: Convert above output to appropriate numpy arrays
 
             # linearize about state to get A and B, apply modification for quaternions
-            A = jax.jacfwd(lambda y: self.take_rk4_step(y, ref_control))(full_ref_state)
-            # B = jax.jacfwd(lambda y: self.quad_rk4_step(self.xref,y))(self.uref)
-            # A, B = self.calculate_jacobians()
+            A = np.asarray(jax.jacfwd(lambda y: self.take_rk4_step(y, ref_control))(full_ref_state))
+            B = np.asarray(jax.jacfwd(lambda y: self.take_rk4_step(full_ref_state,y))(ref_control))
 
+            #apply modification for quaternions
 
             # gains_dict["K"]  = K
             lqr_gains.append(gains_dict)
@@ -128,21 +134,26 @@ class LQR_Controller(Controller):
 
     def take_rk4_step(self, x_current, u):
         """ Numerical Integration with RK4 for a time step"""
-
-        dt = self.sim_params["time"]["dt"]
         
+        # Ensure inputs are JAX arrays
+        x_current = jnp.asarray(x_current)
+        u = jnp.asarray(u)
+
         #RK4 integration with zero-order hold on u  
         k1 = self.quad_dynamics(x_current,u)
-        k2 = self.quad_dynamics(x_current + (0.5*dt*k1), u)
-        k3 = self.quad_dynamics(x_current + (0.5*dt*k2), u)
-        k4 = self.quad_dynamics(x_current + (dt*k3)    , u)
+        k2 = self.quad_dynamics(x_current + (0.5*self.dt*k1), u)
+        k3 = self.quad_dynamics(x_current + (0.5*self.dt*k2), u)
+        k4 = self.quad_dynamics(x_current + (self.dt*k3)    , u)
 
         x = x_current + (
-            (dt/6)*( k1 + (2*k2) + (2*k3) + k4  )
+            (self.dt/6)*( k1 + (2*k2) + (2*k3) + k4  )
         )
 
         #re-normalize quaternion 
-        x[3:7] = x[3:7]/np.linalg.norm(x[3:7])
+        # x[3:7] = x[3:7]/np.linalg.norm(x[3:7])
+        norm_var = jnp.linalg.norm(x[3:7])
+        x = x.at[3:7].set(x[3:7]/norm_var)
+
 
         return x
     
@@ -155,66 +166,95 @@ class LQR_Controller(Controller):
         velocity     = x_current[7:10]
         ang_velocity = x_current[10:]
         
+        # x_dot = jnp.zeros([13])
+        rotation_matrix = self.quat_to_rotmat(orientation)
 
-        x_dot = np.zeros([13])
-        rotation_matrix = R.from_quat(orientation,scalar_first=True).as_matrix()
+        pos_dot = rotation_matrix@velocity
+        quat_dot = 0.5*self.quaternion_multiply_left(orientation)@self.pad_matrix@ang_velocity
 
-        x_dot[0:3] = rotation_matrix@velocity
-        x_dot[3:7] = 0.5*self.quaternion_multiply_left(orientation)@self.pad_matrix@ang_velocity
-
-
-
-        I = np.array([
+        I = jnp.array([
                 [self.I_xx, 0,         0],
                 [0,         self.I_yy, 0],
                 [0,         0,         self.I_zz]
         ])
 
-        u_matrix = np.block([
-                [np.zeros([2,4])],
-                [self.kf*np.ones([1,4])]
+        u_matrix = jnp.block([
+                [jnp.zeros([2,4])],
+                [self.kf*jnp.ones([1,4])]
         ])  
 
-        x_dot[7:10] = ( (rotation_matrix.T) @ np.array([0,0,-g]) ) + ( (1/self.mass)*(u_matrix@u) )  
+        vel_dot = ( (rotation_matrix.T) @ jnp.array([0,0,-self.g]) ) + ( (1/self.mass)*(u_matrix@u) )  
         - ( self.hat_operator(ang_velocity) @ velocity )
 
-        torques_body_frame = np.array([
+        torques_body_frame = jnp.array([
             self.arm_length*self.kf*(u[1]-u[3]),
             self.arm_length*self.kf*(u[2]-u[0]),
             self.km*(u[0]-u[1]+u[2]-u[3])
             ])
         
-        x_dot[10:] = np.linalg.solve(I,
+        omega_dot = jnp.linalg.solve(I,
         torques_body_frame - (self.hat_operator(ang_velocity)@I@ang_velocity)
         )  
 
+        x_dot = jnp.block([
+            pos_dot,quat_dot,vel_dot,omega_dot
+        ])
+
         return x_dot
     
+    def quat_to_rotmat(self,q):    
+        # Converts quaternion to rotation matrix
+            
+        H = jnp.block([
+                [jnp.zeros([1,3])],
+                [jnp.eye(3)]
+        ]
+        )
+
+        Lq = self.quaternion_multiply_left(q)
+        Rq = self.quaternion_multiply_right(q)
+
+        Q = (H.T)@Lq@(Rq.T)@H
+        # Q = (H.T)@T@(self.L(q))@T@(self.L(q))@H
+        return Q     
 
     def quaternion_multiply_left(self, q):
         """ Quaternion multiplication via left sided matrix multiplication """
 
         s = q[0]
-        v = np.array(q[1:]).reshape((3,1))
+        v = jnp.array(q[1:]).reshape((3,1))
         v_t = v.T
 
-        Lq = np.block([
+        Lq = jnp.block([
                 [s,-v_t],
-                [v, (s*np.eye(3))+self.hat_operator(v)]
+                [v, (s*jnp.eye(3))+self.hat_operator(v)]
         ])
         return Lq
     
+    def quaternion_multiply_right(self,q):
+        #Takes a quaternion and returns a matrix for right multiplication
+        s = q[0]
+        v = jnp.array(q[1:]).reshape((3,1))
+        v_t = v.T
+
+        Rq = jnp.block([
+                [s,-v_t],
+                [v, (s*jnp.eye(3))-self.hat_operator(v)]
+        ])
+        return Rq
 
     @staticmethod
     def hat_operator(x):
-            # Takes a vector and returns 3x3 skew symmetric matrix
-            x = np.array(x).reshape(3,)
-            x1 = x[0]
-            x2 = x[1]
-            x3 = x[2]
+        # Takes a vector and returns 3x3 skew symmetric matrix
+        x = jnp.array(x).reshape(3,)
+        x1 = x[0]
+        x2 = x[1]
+        x3 = x[2]   
 
-            return np.array([
-                    [0,-x3,x2],
-                    [x3,0,-x1],
-                    [-x2,x1,0]
-            ])
+        return jnp.array([
+                [0,-x3,x2],
+                [x3,0,-x1],
+                [-x2,x1,0]
+        ])
+    
+    
