@@ -50,6 +50,7 @@ class LQR_Controller(Controller):
     def set_trajectory(self, trajectory):
         # self.trajectory_object = trajectory
         self.lqr_K = self.calculate_gains(trajectory)
+        pass
 
     def calculate_gains(self, trajectory_object):
         
@@ -74,28 +75,25 @@ class LQR_Controller(Controller):
             full_ref_state, ref_control = self.get_full_references(pos_des, vel_des, acc_des, jerk_des, snap_des)
             #TODO: Convert above output to appropriate numpy arrays
 
-            # linearize about state to get A and B, apply modification for quaternions
+            # linearize about state to get A and B
             A = np.asarray(jax.jacfwd(lambda y: self.take_rk4_step(y, ref_control))(full_ref_state))
             B = np.asarray(jax.jacfwd(lambda y: self.take_rk4_step(full_ref_state,y))(ref_control))
 
-            #apply modification for quaternions
+             # get next reference quaternion for jacobian modification
+            pos_d, vel_d, acc_d = trajectory_object.evaluate_trajectory(times[k+1])
+            jerk_d, snap_d      = trajectory_object.evaluate_jerk_snap(times[k+1])
+            next_ref_state, _   = self.get_full_references(pos_d, vel_d, acc_d, jerk_d, snap_d)
 
-            # gains_dict["K"]  = K
+            #apply modification for quaternions
+            A_mod = (self.E(next_ref_state[3:7]).T)@A@self.E(full_ref_state[3:7])
+            B_mod = (self.E(next_ref_state[3:7]).T)@B
+
+            K = np.linalg.solve( (self.R + (B_mod.T@P[k+1,:,:]@B_mod) ), (B_mod.T @ P[k+1,:,:] @ A_mod) )
+            P[k,:,:] = self.Q + ( A_mod.T @ P[k+1,:,:] @ (A_mod - B_mod @ K)    )
+            gains_dict["K"]  = K
             lqr_gains.append(gains_dict)
 
-
-        # N = len(A_seq)
-        n, m = B_seq[0].shape[0], B_seq[0].shape[1]
-        P = [None]*(N+1)
-        K = [None]*N
-        P[N] = Qf
-
-        for k in range(N-1, -1, -1):
-            A, B = A_seq[k], B_seq[k]
-            Q, R = Q_seq[k], R_seq[k]
-            S = R + B.T @ P[k+1] @ B
-            K[k] = np.linalg.solve(S, B.T @ P[k+1] @ A)
-            P[k] = Q + A.T @ P[k+1] @ (A - B @ K[k])       
+        return lqr_gains
 
 
     def get_full_references(self, pos_des, vel_des, acc_des, jerk_des, snap_des):
@@ -153,7 +151,6 @@ class LQR_Controller(Controller):
         # x[3:7] = x[3:7]/np.linalg.norm(x[3:7])
         norm_var = jnp.linalg.norm(x[3:7])
         x = x.at[3:7].set(x[3:7]/norm_var)
-
 
         return x
     
@@ -257,4 +254,15 @@ class LQR_Controller(Controller):
                 [-x2,x1,0]
         ])
     
+    def E(self,q):
+            return block_diag(np.eye(3), self.calc_attitude_jacobian(q), np.eye(6))
     
+
+    def calc_attitude_jacobian(self,q):
+            # Calculate attitude jacobian at q
+            H = jnp.block([
+                    [jnp.zeros([1,3])],
+                    [jnp.eye(3)]
+            ])
+            G = self.quaternion_multiply_left(q)@H
+            return G
