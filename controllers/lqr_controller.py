@@ -40,22 +40,57 @@ class LQR_Controller(Controller):
                         [jnp.eye(3)]
                         ])  
 
+        self.motor_matrix = np.array([
+                [self.kf,                     self.kf,                 self.kf,                  self.kf],
+                [0,                           self.arm_length*self.kf, 0,                        -self.arm_length*self.kf],
+                [-self.arm_length*self.kf,    0,                       self.arm_length*self.kf,       0],
+                [self.km,                     -self.km,                self.km,                  -self.km]
+        ]) 
+
 
     def calculate_control(self,state,t): 
+
+        pos_des, vel_des, acc_des = self.trajectory_object.evaluate_trajectory(t)
+        # if time outside of planned trajectory (when running sim longer than last waypoint time)
+        if not isinstance(pos_des, np.ndarray):
+             pos_des = self.waypoints[-1]["pose"][0:3]
+             full_ref_state = np.array([pos_des[0], pos_des[1], pos_des[2],
+                          1, 0, 0, 0,
+                          0, 0, 0, 
+                          0, 0, 0])
+             u = (1/self.kf)*(self.mass*self.g)/4
+             ref_control = u*np.ones((4))
+            #  return ref_control
+        else:
+            jerk_des, snap_des        = self.trajectory_object.evaluate_jerk_snap(t)
+            full_ref_state, ref_control = self.get_full_reference_estimate(pos_des, vel_des, acc_des, jerk_des, snap_des)
+
+        q_ref   = full_ref_state[3:7]
+        q       = state[3:7]
+        L_qref  = self.quaternion_multiply_left(q_ref)
+        phi     = self.quat_to_rodrig(L_qref.T@q)
+        del_x = np.block([state[0:3]-full_ref_state[0:3],
+                          phi,
+                          state[7:10]-full_ref_state[7:10],
+                          state[10:13]-full_ref_state[10:13]]) 
+        
+        for gains_dict in self.lqr_K:
+            if gains_dict["t"] <=  t: #< segment['tf']:
+                K = gains_dict["K"]
+
+        u = ref_control - K@del_x
 
         return u
     
 
-
     def set_trajectory(self, trajectory):
-        # self.trajectory_object = trajectory
+        self.trajectory_object = trajectory
         self.lqr_K = self.calculate_gains(trajectory)
-        pass
 
     def calculate_gains(self, trajectory_object):
         
         tf = self.waypoints[-1]["t"]
-        times = np.arange(0, tf, self.controller_dt)
+        times = np.arange(0, tf + self.controller_dt, self.controller_dt)
         num_steps = len(times)
         # num_steps = int((tf/self.controller_dt)) #+ 1
 
@@ -65,16 +100,15 @@ class LQR_Controller(Controller):
         lqr_gains = [] #List of dictionaries
         K = np.zeros((4, 12))
         # K = np.zeros((num_steps-1,  4, 12))   #associate K with a time in a dictionary
-
         for k in range(num_steps-2,-1,-1):
             gains_dict = {}
             gains_dict["t"]  = times[k]
             
             pos_des, vel_des, acc_des = trajectory_object.evaluate_trajectory(times[k])
-            jerk_des, snap_des        = trajectory_object.evaluate_jerk_snap(times[k])
-            full_ref_state, ref_control = self.get_full_references(pos_des, vel_des, acc_des, jerk_des, snap_des)
-            #TODO: Convert above output to appropriate numpy arrays
 
+            jerk_des, snap_des        = trajectory_object.evaluate_jerk_snap(times[k])
+            full_ref_state, ref_control = self.get_full_reference_estimate(pos_des, vel_des, acc_des, jerk_des, snap_des)
+            
             # linearize about state to get A and B
             A = np.asarray(jax.jacfwd(lambda y: self.take_rk4_step(y, ref_control))(full_ref_state))
             B = np.asarray(jax.jacfwd(lambda y: self.take_rk4_step(full_ref_state,y))(ref_control))
@@ -82,7 +116,7 @@ class LQR_Controller(Controller):
              # get next reference quaternion for jacobian modification
             pos_d, vel_d, acc_d = trajectory_object.evaluate_trajectory(times[k+1])
             jerk_d, snap_d      = trajectory_object.evaluate_jerk_snap(times[k+1])
-            next_ref_state, _   = self.get_full_references(pos_d, vel_d, acc_d, jerk_d, snap_d)
+            next_ref_state, _   = self.get_full_reference_estimate(pos_d, vel_d, acc_d, jerk_d, snap_d)
 
             #apply modification for quaternions
             A_mod = (self.E(next_ref_state[3:7]).T)@A@self.E(full_ref_state[3:7])
@@ -93,18 +127,22 @@ class LQR_Controller(Controller):
             gains_dict["K"]  = K
             lqr_gains.append(gains_dict)
 
+        lqr_gains.reverse()
         return lqr_gains
 
 
-    def get_full_references(self, pos_des, vel_des, acc_des, jerk_des, snap_des):
+    def get_full_reference_eqn(self, pos_des, vel_des, acc_des, jerk_des, snap_des):
         # Creates a full state reference and a control reference based on approximations to dynamics
 
         phi_des   = -acc_des[1]/self.g
         theta_des =  acc_des[0]/self.g
         psi_des   =  0
 
-        r    =  R.from_euler('ZYX', [[psi_des, theta_des, phi_des]])
+        r    =  R.from_euler('ZYX', [psi_des, theta_des, phi_des])
         quat =  r.as_quat(scalar_first=True)
+        R_wb = self.quat_to_rotmat(quat)     
+
+        vel_des_body = R_wb.T @ vel_des  
 
         wx_des = -jerk_des[1]/self.g
         wy_des =  jerk_des[0]/self.g
@@ -120,15 +158,67 @@ class LQR_Controller(Controller):
         T_des = self.mass*(acc_des[2]+self.g)
 
         state = np.array([pos_des[0], pos_des[1], pos_des[2],
-                          quat[0][0], quat[0][1], quat[0][2], quat[0][3],
-                          vel_des[0], vel_des[1], vel_des[2], 
+                          quat[0], quat[1], quat[2], quat[3],
+                          vel_des_body[0], vel_des_body[1], vel_des_body[2], 
                           wx_des,wy_des,wz_des])
 
-        # state =   [pos_des,quat,vel_des,wx_des,wy_des,wz_des]
-        control = np.array([T_des,tau_phi,tau_theta,tau_psi ])
 
-        return state, control
+        F_vec = np.array([T_des,tau_phi,tau_theta,tau_psi ]).reshape(4,1)
+        u_diff = np.linalg.solve(self.motor_matrix, F_vec)
+
+        # u = self.u_hover + u_diff
+        control = u_diff
+
+        return state, control.squeeze()
     
+
+
+    def get_full_reference_estimate(self, pos_des, vel_des, acc_des, jerk_des, snap_des):
+        # Creates a full state reference and a control reference estimate
+
+        phi_des   = np.degrees(-acc_des[1]/self.g)
+        if phi_des > 30:           # To stay close to small angle approximation
+            phi_des = 30
+        elif phi_des < -30:
+            phi_des = -30
+        theta_des =  np.degrees(acc_des[0]/self.g)
+        if theta_des > 30:           # To stay close to small angle approximation
+            theta_des = 30
+        elif theta_des < -30:
+            theta_des = -30
+        psi_des   =  0
+
+        r    =  R.from_euler('ZYX', [psi_des, theta_des, phi_des], degrees=True)
+        quat =  r.as_quat(scalar_first=True)
+        R_wb = self.quat_to_rotmat(quat)     
+
+        vel_des_body = R_wb.T @ vel_des  
+
+        wx_des = 1*(np.abs(phi_des)/30)
+        wy_des = 1*(np.abs(theta_des)/30)
+        wz_des =  0
+
+        tau_phi =   self.I_xx*wx_des
+        tau_theta = self.I_yy*wy_des
+        tau_psi = 0
+        T_des = self.mass*(acc_des[2]+self.g)
+
+        F_vec = np.array([T_des,tau_phi,tau_theta,tau_psi ]).reshape(4,1)
+        u_diff = np.linalg.solve(self.motor_matrix, F_vec)
+
+        # u = self.u_hover + u_diff
+        control = u_diff
+
+        state = np.array([pos_des[0], pos_des[1], pos_des[2],
+                          quat[0], quat[1], quat[2], quat[3],
+                          vel_des_body[0], vel_des_body[1], vel_des_body[2],
+                          wx_des,wy_des,wz_des])        
+        
+        # u = (1/self.kf)*(self.mass*self.g)/4
+        # control = u*np.ones((4))
+
+        return state, control.squeeze()
+
 
     def take_rk4_step(self, x_current, u):
         """ Numerical Integration with RK4 for a time step"""
@@ -139,12 +229,12 @@ class LQR_Controller(Controller):
 
         #RK4 integration with zero-order hold on u  
         k1 = self.quad_dynamics(x_current,u)
-        k2 = self.quad_dynamics(x_current + (0.5*self.dt*k1), u)
-        k3 = self.quad_dynamics(x_current + (0.5*self.dt*k2), u)
-        k4 = self.quad_dynamics(x_current + (self.dt*k3)    , u)
+        k2 = self.quad_dynamics(x_current + (0.5*self.controller_dt*k1), u)
+        k3 = self.quad_dynamics(x_current + (0.5*self.controller_dt*k2), u)
+        k4 = self.quad_dynamics(x_current + (self.controller_dt*k3)    , u)
 
         x = x_current + (
-            (self.dt/6)*( k1 + (2*k2) + (2*k3) + k4  )
+            (self.controller_dt/6)*( k1 + (2*k2) + (2*k3) + k4  )
         )
 
         #re-normalize quaternion 
@@ -180,8 +270,7 @@ class LQR_Controller(Controller):
                 [self.kf*jnp.ones([1,4])]
         ])  
 
-        vel_dot = ( (rotation_matrix.T) @ jnp.array([0,0,-self.g]) ) + ( (1/self.mass)*(u_matrix@u) )  
-        - ( self.hat_operator(ang_velocity) @ velocity )
+        vel_dot = ( (rotation_matrix.T) @ jnp.array([0,0,-self.g]) ) + ( (1/self.mass)*(u_matrix@u) )  - ( self.hat_operator(ang_velocity) @ velocity )
 
         torques_body_frame = jnp.array([
             self.arm_length*self.kf*(u[1]-u[3]),
@@ -266,3 +355,14 @@ class LQR_Controller(Controller):
             ])
             G = self.quaternion_multiply_left(q)@H
             return G
+    
+    @staticmethod
+    def rodrig_to_quat(phi):
+            phi = np.array(phi).reshape((3,1))
+            a = 1/np.sqrt(phi.T@phi)
+            return a*np.block([ [1],[phi] ])
+
+    @staticmethod
+    def quat_to_rodrig(quat):
+            quat = np.array(quat).reshape((4,))
+            return quat[1:4]/quat[0]

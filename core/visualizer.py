@@ -146,6 +146,9 @@ class Visualizer():
         arm_length = self.params["quadcopter"]["arm_length"]
         if (self.params["world"]["wind"]["active"] == "True"):
               wind = "Active"
+        else:
+              wind = "Off"
+              
         input_delay = dt * self.params["time"]["delay_time_step"]
 
         settings_str = (

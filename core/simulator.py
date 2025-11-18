@@ -15,9 +15,12 @@ class Simulator():
             self.wind_sim     = True  
             self.wind_vector  = np.array(self.params["world"]["wind"]["speed_vector"])
             self.wind_std_dev = np.array(self.params["world"]["wind"]["std_deviation"])
+            #TODO: Clean this up later
             self.Cd = self.params["world"]["wind"]["Cd"]
             self.mass = self.params["quadcopter"]["mass"]
             self.arm_length = self.params["quadcopter"]["arm_length"]
+        else:
+            self.wind_sim     = False
 
     def simulate(self, controller, controller_dt): #-> str:
         """Simulate Quadcopter Flight"""
@@ -38,19 +41,22 @@ class Simulator():
         controller_time = 0
         u_calculated = False  # To prevent u_calc being recalculated for the entire window [controller_time, controller_time+input_delay)
 
+        print("Started Sim Loop")
         for idx in range(1,n_steps+1):
             x_current = states[:, idx-1]
-            t  = idx * dt
+            t  = idx * dt        
 
             if (t>=controller_time) and (t <= (controller_time+input_delay) ):
                 if u_calculated == False:
                     u_calc  = controller.calculate_control(x_current, t) 
                     u_calculated = True
             if (t >= (controller_time+input_delay) ) or (idx==1):
+                if input_delay == 0:
+                    u_calc  = controller.calculate_control(x_current, t) 
                 u = u_calc
                 controller_time += controller_dt
                 u_calculated = False
-                # print(f"Time: {t}, Control Input given")
+                print(f"Time: {t}, Control Input given")
             
             if (t%1==0):
                 print(f"Time: {t}")
@@ -76,6 +82,8 @@ class Simulator():
 
         if self.wind_sim == True:
             wind_acc = self.wind_dynamics(x_current)   
+        else:
+            wind_acc = 0
         
         #RK4 integration with zero-order hold on u
         k1 = self.quad_dynamics(x_current,u, wind_acc)
@@ -128,8 +136,7 @@ class Simulator():
                 [kf*np.ones([1,4])]
         ])  
 
-        x_dot[7:10] = ( (rotation_matrix.T) @ np.array([0,0,-g]) ) + ( (1/mass)*(u_matrix@u) )  
-        - ( self.hat_operator(ang_velocity) @ velocity )
+        x_dot[7:10] = ( (rotation_matrix.T) @ np.array([0,0,-g]) ) + ( (1/mass)*(u_matrix@u) )  - ( self.hat_operator(ang_velocity) @ velocity )
 
         if self.wind_sim == True:
             x_dot[7:10] += wind_acc

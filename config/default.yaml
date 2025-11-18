@@ -1,7 +1,7 @@
 time:                      # Assumptions: controller_dt ≥ sim_dt, input_delay = delay_time_step*dt, input_delay ≤ controller_dt
   dt: 0.01
-  duration: 4.0
-  delay_time_step: 1       #input delay, represented as number of time steps after calculating control, to apply the control. Set to 0, for no input delay
+  duration: 10.0
+  delay_time_step: 0       #input delay, represented as number of time steps after calculating control, to apply the control. Set to 0, for no input delay
 
 quadcopter:
   mass: 0.5
@@ -11,7 +11,7 @@ quadcopter:
   arm_length: 0.175
   motor: {kf: 1, km: 0.0245}
   limits:
-    clip_factor: 4   # Max control input represented as clip_factor*quad_weight
+    clip_factor: 10   # Max control input represented as clip_factor*quad_weight
     # roll_pitch_rad: 0.6
     # yaw_rate: 3.5
     # thrust_total: [0.0, 18.0]
@@ -31,7 +31,7 @@ world:
     #                 0.0, 0.0, 0.0,             
     #                 0.0, 0.0, 0.0 ]} 
 
-    - {t: 3.0,  pose: [0.0, 0.0, 3.5,
+    - {t: 4.0,  pose: [0.0, 0.0, 3.5,
                     1.0, 0.0, 0.0, 0.0,        
                     0.0, 0.0, 0.0,             
                     0.0, 0.0, 0.0 ]}    
@@ -49,7 +49,7 @@ world:
 
 obstacles:
   static:
-    - {type: sphere, pose: [0.0, 0.0, 2.5], radius: 0.2}
+    - {type: sphere, pose: [0.0, 0.0, 2.5], radius: 0.2}                         #TODO: Handle cases with no objects
       # - {type: box, pose: [2.0, 0.0, 1.0, 0,0,0], size: [0.2, 4.0, 2.0]}
 
 
