@@ -5,6 +5,7 @@ from scipy.spatial.transform import Rotation as R
 from scipy.linalg import block_diag
 import jax
 import jax.numpy as jnp
+import control as ct
 
 class LQR_Controller(Controller):
 
@@ -47,6 +48,7 @@ class LQR_Controller(Controller):
                 [self.km,                     -self.km,                self.km,                  -self.km]
         ]) 
 
+        self.final_K = None
 
     def calculate_control(self,state,t): 
 
@@ -60,25 +62,37 @@ class LQR_Controller(Controller):
                           0, 0, 0])
              u = (1/self.kf)*(self.mass*self.g)/4
              ref_control = u*np.ones((4))
+             q_ref   = full_ref_state[3:7]
+             q       = state[3:7]
+             L_qref  = self.quaternion_multiply_left(q_ref)
+             phi     = self.quat_to_rodrig(L_qref.T@q)
+             del_x = np.block([state[0:3]-full_ref_state[0:3],
+                            phi,
+                            state[7:10]-full_ref_state[7:10],
+                            state[10:13]-full_ref_state[10:13]]) 
+                     
+             u = ref_control - self.final_K@del_x
+
             #  return ref_control
+
         else:
             jerk_des, snap_des        = self.trajectory_object.evaluate_jerk_snap(t)
             full_ref_state, ref_control = self.get_full_reference_estimate(pos_des, vel_des, acc_des, jerk_des, snap_des)
 
-        q_ref   = full_ref_state[3:7]
-        q       = state[3:7]
-        L_qref  = self.quaternion_multiply_left(q_ref)
-        phi     = self.quat_to_rodrig(L_qref.T@q)
-        del_x = np.block([state[0:3]-full_ref_state[0:3],
-                          phi,
-                          state[7:10]-full_ref_state[7:10],
-                          state[10:13]-full_ref_state[10:13]]) 
-        
-        for gains_dict in self.lqr_K:
-            if gains_dict["t"] <=  t: #< segment['tf']:
-                K = gains_dict["K"]
+            q_ref   = full_ref_state[3:7]
+            q       = state[3:7]
+            L_qref  = self.quaternion_multiply_left(q_ref)
+            phi     = self.quat_to_rodrig(L_qref.T@q)
+            del_x = np.block([state[0:3]-full_ref_state[0:3],
+                            phi,
+                            state[7:10]-full_ref_state[7:10],
+                            state[10:13]-full_ref_state[10:13]]) 
+            
+            for gains_dict in self.lqr_K:
+                if gains_dict["t"] <=  t: #< segment['tf']:
+                    K = gains_dict["K"]
 
-        u = ref_control - K@del_x
+            u = ref_control - K@del_x
 
         return u
     
@@ -126,6 +140,21 @@ class LQR_Controller(Controller):
             P[k,:,:] = self.Q + ( A_mod.T @ P[k+1,:,:] @ (A_mod - B_mod @ K)    )
             gains_dict["K"]  = K
             lqr_gains.append(gains_dict)
+
+
+        pos_des = self.waypoints[-1]["pose"][0:3]
+        full_ref_state = np.array([pos_des[0], pos_des[1], pos_des[2],
+                    1, 0, 0, 0,
+                    0, 0, 0, 
+                    0, 0, 0])
+        u = (1/self.kf)*(self.mass*self.g)/4
+        ref_control = u*np.ones((4))
+
+        A = np.asarray(jax.jacfwd(lambda y: self.take_rk4_step(y, ref_control))(full_ref_state))
+        B = np.asarray(jax.jacfwd(lambda y: self.take_rk4_step(full_ref_state,y))(ref_control))
+        A_mod = (self.E(full_ref_state[3:7]).T)@A@self.E(full_ref_state[3:7])
+        B_mod = (self.E(full_ref_state[3:7]).T)@B               
+        self.final_K, S, E = ct.dlqr(A_mod, B_mod, self.Qf, self.R) 
 
         lqr_gains.reverse()
         return lqr_gains
@@ -177,15 +206,15 @@ class LQR_Controller(Controller):
         # Creates a full state reference and a control reference estimate
 
         phi_des   = np.degrees(-acc_des[1]/self.g)
-        if phi_des > 30:           # To stay close to small angle approximation
-            phi_des = 30
-        elif phi_des < -30:
-            phi_des = -30
+        if phi_des > 15:           # To stay close to small angle approximation
+            phi_des = 15
+        elif phi_des < -15:
+            phi_des = -15
         theta_des =  np.degrees(acc_des[0]/self.g)
-        if theta_des > 30:           # To stay close to small angle approximation
-            theta_des = 30
-        elif theta_des < -30:
-            theta_des = -30
+        if theta_des > 15:           # To stay close to small angle approximation
+            theta_des = 15
+        elif theta_des < -15:
+            theta_des = -15
         psi_des   =  0
 
         r    =  R.from_euler('ZYX', [psi_des, theta_des, phi_des], degrees=True)
@@ -194,12 +223,12 @@ class LQR_Controller(Controller):
 
         vel_des_body = R_wb.T @ vel_des  
 
-        wx_des = 1*(np.abs(phi_des)/30)
-        wy_des = 1*(np.abs(theta_des)/30)
+        wx_des = 1*(phi_des/15)
+        wy_des = 1*(theta_des/15)
         wz_des =  0
 
-        tau_phi =   self.I_xx*wx_des
-        tau_theta = self.I_yy*wy_des
+        tau_phi =   0 #0.1*wx_des
+        tau_theta = 0 #0.1*wy_des
         tau_psi = 0
         T_des = self.mass*(acc_des[2]+self.g)
 
