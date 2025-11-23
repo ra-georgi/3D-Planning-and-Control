@@ -132,7 +132,7 @@ class Quintic_Spline_Interpolator():
 
         if tau == -1:
             # if t is outside the defined time range
-            print("Time outside trajectory time limits")
+            print( f"Time outside trajectory time limits: {time}")
             return None, None, None
         else:
             coeff_x = coeff[0,:]

@@ -1,5 +1,6 @@
-rates_hz: 10
+rates_hz: 5
+mpc_horizon: 3  # number of controller time steps (including current time step)
 state_cost_multiplier: 10.0
 terminal_state_cost_multiplier: 10.0
 control_cost_multiplier: 0.1
-orientation_cost_multiplier: 0.1  # keeping this value low as current trajectory does not provide inaccurate orientation to track
+orientation_cost_multiplier: 1  # keeping this value low as current trajectory does not provide inaccurate orientation to track

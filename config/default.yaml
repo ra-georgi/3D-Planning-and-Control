@@ -1,6 +1,6 @@
 time:                      # Assumptions: controller_dt ≥ sim_dt, input_delay = delay_time_step*dt, input_delay ≤ controller_dt
   dt: 0.01
-  duration: 6.0
+  duration: 4.0
   delay_time_step: 0       #input delay, represented as number of time steps after calculating control, to apply the control. Set to 0, for no input delay
 
 quadcopter:
@@ -31,10 +31,10 @@ world:
                     0.0, 0.0, 0.0,             
                     0.0, 0.0, 0.0 ]} 
 
-    - {t: 5.0,  pose: [0.5, 0.0, 1.0,
-                    1.0, 0.0, 0.0, 0.0,        
-                    0.0, 0.0, 0.0,             
-                    0.0, 0.0, 0.0 ]}    
+    # - {t: 5.0,  pose: [0.5, 0.0, 1.0,
+    #                 1.0, 0.0, 0.0, 0.0,        
+    #                 0.0, 0.0, 0.0,             
+    #                 0.0, 0.0, 0.0 ]}    
 
     # - {t: 3.0,  pose: [1.0, 1.0, 2.0,
     #                 1.0, 0.0, 0.0, 0.0,        
