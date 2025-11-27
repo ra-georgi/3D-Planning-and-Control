@@ -116,27 +116,75 @@ class Visualizer():
         )        
         self.ax_side.add_patch(self.box_data)
 
-        self.box_settings = FancyBboxPatch(
+        self.box_legend = FancyBboxPatch(
             (0.0, 0.01), 0.85, 0.61,
             transform=self.ax_side.transAxes,
             boxstyle="round,pad=0.0,rounding_size=0.0",
             facecolor="#D8E2DC", edgecolor=(0, 0, 0, 0.25), linewidth=1.0
         )
-        self.ax_side.add_patch(self.box_settings)
+        self.ax_side.add_patch(self.box_legend)
 
         # --- Titles for the two boxes ---
         self.ax_side.text(0.40, 0.97, "Data",
                           transform=self.ax_side.transAxes,
                           ha="center", va="top", fontsize=14, weight="bold")
 
-        self.ax_side.text(0.40, 0.60, "Settings",
+        self.ax_side.text(0.40, 0.60, "Legend",
                           transform=self.ax_side.transAxes,
                           ha="center", va="top", fontsize=14, weight="bold")
+        
 
         # --- Dynamic text that will be updated each frame (inside Data box) ---
         self.txt_data = self.ax_side.text(
-            0.1, 0.93, "", transform=self.ax_side.transAxes,
-            ha="left", va="top", family="DejaVu Sans Mono", fontsize=13, color="#222", style="italic", linespacing=1.5   
+            0.18, 0.92, "", transform=self.ax_side.transAxes,
+            ha="left", va="top", fontsize=13, color="#222", style="italic", linespacing=1.5   
+        )
+
+
+        # --- Add symbols for legend items (adjust colors to match your plot) ---
+        legend_items = [
+            ("Quadcopter", "k", "x"),      # black cross
+            ("Waypoints", "orange", "o"),  # orange circles
+            ("Obstacle", "red", "o"),      # red sphere
+            ("Trajectory", "blue", "."),   # blue line
+        ]
+
+        y_pos = 0.5
+        for label, color, marker in legend_items:
+            self.ax_side.plot(
+                [0.22], [y_pos], marker=marker,
+                color=color, markersize=8, markeredgecolor="black", transform=self.ax_side.transAxes
+            )
+            self.ax_side.text(
+                0.32, y_pos, label,
+                transform=self.ax_side.transAxes,
+                ha="left", va="center", fontsize=10, color="#222"
+            )
+            y_pos -= 0.10
+
+
+        # --- RIGHT CARDS  ---------------------------------------------
+        #TODO: Swap legend and settings position
+        # --- Left sidebar for Legend ---
+        self.ax_left = plt.axes([0.039, 0.01, 0.22, 0.98])
+        self.ax_left.axis('off')
+
+        # Legend box
+        self.box_legend = FancyBboxPatch(
+            (0.2, 0.0), 0.9, 1,
+            transform=self.ax_left.transAxes,
+            boxstyle="round,pad=0.0,rounding_size=0.00",
+            facecolor="#EFDFD8", edgecolor=(0, 0, 0, 0.25), linewidth=1.0,
+        )
+        self.ax_left.add_patch(self.box_legend)
+
+
+        # Title
+        self.ax_left.text(
+            0.6, 0.98, "Settings",
+            transform=self.ax_left.transAxes,
+            ha="center", va="top",
+            fontsize=14, weight="bold"
         )
 
         # --- Static settings text (computed once) ---
@@ -163,56 +211,10 @@ class Visualizer():
             f" Wind Disturbances: {wind} \n"
         )
 
-        self.ax_side.text(
-            0.01, 0.55, settings_str, transform=self.ax_side.transAxes,
+        self.ax_left.text(
+            0.22, 0.92, settings_str, transform=self.ax_left.transAxes,
             ha="left", va="top", family="DejaVu Sans Mono", fontsize=10, color="#222", style="italic", linespacing=2
         )
-
-
-        # --- RIGHT CARDS  ---------------------------------------------
-        #TODO: Swap legend and settings position
-        # --- Left sidebar for Legend ---
-        self.ax_legend = plt.axes([0.039, 0.01, 0.22, 0.98])
-        self.ax_legend.axis('off')
-
-        # Legend box
-        self.box_legend = FancyBboxPatch(
-            (0.2, 0.0), 0.9, 1,
-            transform=self.ax_legend.transAxes,
-            boxstyle="round,pad=0.0,rounding_size=0.00",
-            facecolor="#EFDFD8", edgecolor=(0, 0, 0, 0.25), linewidth=1.0,
-        )
-        self.ax_legend.add_patch(self.box_legend)
-
-
-        # Title
-        self.ax_legend.text(
-            0.6, 0.98, "Legend",
-            transform=self.ax_legend.transAxes,
-            ha="center", va="top",
-            fontsize=14, weight="bold"
-        )
-
-        # --- Add symbols for legend items (adjust colors to match your plot) ---
-        legend_items = [
-            ("Quadcopter", "k", "x"),      # black cross
-            ("Waypoints", "orange", "o"),  # orange circles
-            ("Obstacle", "red", "o"),      # red sphere
-            ("Trajectory", "blue", "."),   # blue line
-        ]
-
-        y_pos = 0.88
-        for label, color, marker in legend_items:
-            self.ax_legend.plot(
-                [0.38], [y_pos], marker=marker,
-                color=color, markersize=8, markeredgecolor="black", transform=self.ax_legend.transAxes
-            )
-            self.ax_legend.text(
-                0.48, y_pos, label,
-                transform=self.ax_legend.transAxes,
-                ha="left", va="center", fontsize=10, color="#222"
-            )
-            y_pos -= 0.10
 
 
         # --- ---------------------------------------------
@@ -366,10 +368,23 @@ class Visualizer():
             control = self.params.get("controller", {}).get("name", "PID")
             
             # Dynamic "Data" box update
+            # self.txt_data.set_text(
+            #     "  t  = {:>5.2f} s \n  x  = {:>5.2f} m\n  y  = {:>5.2f} m\n  z  = {:>5.2f} m\n u1  = {:>5.2f} (rad/s)2 \n u2  = {:>5.2f} (rad/s)2\n u3  = {:>5.2f} (rad/s)2\n u4  = {:>5.2f} (rad/s)2\n"
+            #     .format(time, xt, yt, zt, u1, u2, u3, u4)
+            # )            
+
             self.txt_data.set_text(
-                "  t  = {:>5.2f} s \n  x  = {:>5.2f} m\n  y  = {:>5.2f} m\n  z  = {:>5.2f} m\n u1  = {:>5.2f} (rad/s)2 \n u2  = {:>5.2f} (rad/s)2\n u3  = {:>5.2f} (rad/s)2\n u4  = {:>5.2f} (rad/s)2\n"
-                .format(time, xt, yt, zt, u1, u2, u3, u4)
-            )            
+                (
+                    f" t   = {time:6.2f} s\n"
+                    f" x   = {xt:6.2f} m\n"
+                    f" y   = {yt:6.2f} m\n"
+                    f" z   = {zt:6.2f} m\n"
+                    f"u₁  = {u1:6.2f} (rad/s)²\n"
+                    f"u₂  = {u2:6.2f} (rad/s)²\n"
+                    f"u₃  = {u3:6.2f} (rad/s)²\n"
+                    f"u₄  = {u4:6.2f} (rad/s)²"
+                )
+            )
 
             return 
     
