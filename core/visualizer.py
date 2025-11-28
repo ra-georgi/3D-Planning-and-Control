@@ -9,7 +9,7 @@ from matplotlib import patheffects as pe
 
 class Visualizer():
 
-    def __init__(self, cfg, times, states, controls, controller, planner):
+    def __init__(self, cfg, times, states, controls, controller, planner, trajectory_object):
         self.params   = cfg
         self.times    = times
         self.states   = states
@@ -17,8 +17,18 @@ class Visualizer():
         self.controller_name = controller.controller_name
         self.controller_dt = controller.controller_dt
         if planner is not None:
-              self.planner_name = planner.planner_name
-              self.interpolator_name = planner.interpolator_name
+            self.planner_name = planner.planner_name
+            self.interpolator_name = planner.interpolator_name
+            self.trajectory_object = trajectory_object
+
+            # === Precompute planned trajectory positions ===
+            pos_des_all = np.zeros((3, len(times)))
+            for i, t in enumerate(times):
+                pos_des, vel_des, acc_des = self.trajectory_object.evaluate_trajectory(t)
+                # assume pos_des is [x, y, z]
+                pos_des_all[:, i] = pos_des
+                self.pos_des_all = pos_des_all        
+
         else:
               self.planner_name = " - "
               self.interpolator_name = " - "
@@ -146,17 +156,19 @@ class Visualizer():
             ("Quadcopter", "k", "x"),      # black cross
             ("Waypoints", "orange", "o"),  # orange circles
             ("Obstacle", "red", "o"),      # red sphere
-            ("Trajectory", "blue", "."),   # blue line
+            ("Planned Trajectory", "blue", "."), # dashed line 
+            ("Actual Trajectory", "gray", "."),      
         ]
+    
 
         y_pos = 0.5
         for label, color, marker in legend_items:
             self.ax_side.plot(
-                [0.22], [y_pos], marker=marker,
+                [0.2], [y_pos], marker=marker,
                 color=color, markersize=8, markeredgecolor="black", transform=self.ax_side.transAxes
             )
             self.ax_side.text(
-                0.32, y_pos, label,
+                0.3, y_pos, label,
                 transform=self.ax_side.transAxes,
                 ha="left", va="center", fontsize=10, color="#222"
             )
@@ -280,6 +292,18 @@ class Visualizer():
                                         y_grid + obstacle["pose"][1], 
                                         z_grid + obstacle["pose"][2], color='r',alpha=0.8)                  
 
+
+        # === Plot planned trajectory (static) ===
+        if self.pos_des_all is not None:
+            self.quad_traj_planned = self.ax_anim.plot3D(
+                self.pos_des_all[0, 0],
+                self.pos_des_all[1, 0],
+                self.pos_des_all[2, 0],
+                'b',  # blue dashed planned path
+                linewidth=1.0
+            )[0]
+
+
         #For Frame Update function
         self.arm1_start = np.array([ l,0,0])
         self.arm1_end   = np.array([-l,0,0])
@@ -385,6 +409,11 @@ class Visualizer():
                     f"u₄  = {u4:6.2f} (rad/s)²"
                 )
             )
+
+            self.quad_traj_planned.set_data_3d(self.pos_des_all[0, :frame],
+                                    self.pos_des_all[1, :frame],
+                                    self.pos_des_all[2, :frame])          
+
 
             return 
     

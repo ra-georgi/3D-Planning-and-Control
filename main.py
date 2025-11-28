@@ -16,8 +16,8 @@ from controllers.mpc_controller import MPC_Controller
 with open("config/default.yaml", "r") as f:
     sim_cfg = yaml.safe_load(f)
 
-# planner    = Dijkstra_Planner(sim_cfg)
-planner    = AStar_Planner(sim_cfg)
+planner    = Dijkstra_Planner(sim_cfg)
+# planner    = AStar_Planner(sim_cfg)
 # planner    = RRTStar_Planner(sim_cfg)
 
 controller = Cascade_PID(sim_cfg)
@@ -32,7 +32,7 @@ simulator  = Simulator(sim_cfg)
 times, states, controls = simulator.simulate(controller, controller.controller_dt)
 
 # visualizer = Visualizer(sim_cfg, times, states, controls, controller, None)
-visualizer = Visualizer(sim_cfg, times, states, controls, controller, planner)
+visualizer = Visualizer(sim_cfg, times, states, controls, controller, planner, trajectory_object)
 # #TODO: add option to display tracking error/error data
 # visualizer.plot_states()
 # #TODO: add legend to animation
