@@ -16,8 +16,8 @@ from controllers.mpc_controller import MPC_Controller
 with open("config/default.yaml", "r") as f:
     sim_cfg = yaml.safe_load(f)
 
-planner    = Dijkstra_Planner(sim_cfg)
-# planner    = AStar_Planner(sim_cfg)
+# planner    = Dijkstra_Planner(sim_cfg)
+planner    = AStar_Planner(sim_cfg)
 # planner    = RRTStar_Planner(sim_cfg)
 
 controller = Cascade_PID(sim_cfg)

@@ -91,6 +91,33 @@ class Visualizer():
         """Display animation of simulated quadcopter flight"""
 
         fig = plt.figure(figsize=(15,7),dpi=100)
+
+        # ---- TITLE BANNER -------------------------------------------------
+        # Banner background (rounded rectangle)
+        banner = FancyBboxPatch(
+            (0.2795, 0.96), 0.441, 0.01,   # (x, y, width, height) in figure coords
+            transform=fig.transFigure,
+            boxstyle="square,pad=0.02",
+            facecolor="#1f4e79",        # dark blue
+            edgecolor="none",
+            alpha=0.95
+        )
+        fig.patches.append(banner)
+
+        # Main title text
+        fig.text(
+            0.5, 0.965, "Flight Animation",
+            ha="center", va="center",
+            fontsize=16, color="white",
+            weight="bold", family="Arial", style="italic",
+            path_effects=[pe.withSimplePatchShadow(offset=(1,-1), alpha=0.4)]
+        )
+
+        # hud_title = fig.text(0.5, 0.98, "Flight Animation",ha="center", va="top", fontsize=16, weight="bold", family="Arial", style="italic")
+
+        # ------------------------------------------------------------------
+
+
         self.ax_anim = plt.axes(projection='3d')
 
         for a in (self.ax_anim.xaxis, self.ax_anim.yaxis, self.ax_anim.zaxis):
@@ -107,15 +134,36 @@ class Visualizer():
         # Adjust the size of the plot within the figure
         plt.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
 
-        hud_title = fig.text(0.5, 0.98, "Flight Animation",
-                          ha="center", va="top", fontsize=16, weight="bold", family="Arial", style="italic")
-
 
         self.ax_side = plt.axes([0.74, 0.0, 0.22, 1.0])
         self.ax_side.axis('off')
 
-        # --- LEFT CARDS (two boxes) ---------------------------------------------
+        # --- RIGHT CARDS (two boxes) ---------------------------------------------
         # Card 1: Data (dynamic)
+
+        # ---- RIGHT BANNERS -------------------------------------------------
+        # Banner background (rounded rectangle)
+        banner_data = FancyBboxPatch(
+            (0.76, 0.96), 0.147, 0.01,   # (x, y, width, height) in figure coords
+            transform=fig.transFigure,
+            boxstyle="square,pad=0.02",
+            facecolor="#B8B1D9",       
+            edgecolor="none",
+            alpha=0.95
+        )
+        fig.patches.append(banner_data)
+
+        banner_legend = FancyBboxPatch(
+            (0.76, 0.589), 0.147, 0.01,   # (x, y, width, height) in figure coords
+            transform=fig.transFigure,
+            boxstyle="square,pad=0.02",
+            facecolor="#9FB2A6",       
+            edgecolor="none",
+            alpha=0.95
+        )
+        fig.patches.append(banner_legend)
+
+
 
          # Two rounded boxes inside ax_side (coords are in ax_side Axes coordinates)
         self.box_data = FancyBboxPatch(
@@ -135,15 +183,20 @@ class Visualizer():
         self.ax_side.add_patch(self.box_legend)
 
         # --- Titles for the two boxes ---
-        self.ax_side.text(0.40, 0.97, "Data",
+        fig.text(0.41, 0.978, "Data",
                           transform=self.ax_side.transAxes,
-                          ha="center", va="top", fontsize=14, weight="bold")
+                          ha="center", va="top", fontsize=16, weight="bold",
+                          family="Arial", style="italic",color="white",
+                          path_effects=[pe.withSimplePatchShadow(offset=(1,-1), alpha=0.4)]
+                          )
 
-        self.ax_side.text(0.40, 0.60, "Legend",
+        fig.text(0.4, 0.607, "Legend",
                           transform=self.ax_side.transAxes,
-                          ha="center", va="top", fontsize=14, weight="bold")
+                          ha="center", va="top", fontsize=16, weight="bold",
+                          family="Arial", style="italic",color="white",
+                          path_effects=[pe.withSimplePatchShadow(offset=(1,-1), alpha=0.4)]
+                          )
         
-
         # --- Dynamic text that will be updated each frame (inside Data box) ---
         self.txt_data = self.ax_side.text(
             0.18, 0.92, "", transform=self.ax_side.transAxes,
@@ -176,28 +229,37 @@ class Visualizer():
 
 
         # --- RIGHT CARDS  ---------------------------------------------
-        #TODO: Swap legend and settings position
+
+        banner_settings = FancyBboxPatch(
+            (0.103, 0.96), 0.1361, 0.01,   # (x, y, width, height) in figure coords
+            transform=fig.transFigure,
+            boxstyle="square,pad=0.02",
+            facecolor="#B8A096",       
+            edgecolor="none",
+            alpha=0.95
+        )
+        fig.patches.append(banner_settings)
+
+
         # --- Left sidebar for Legend ---
         self.ax_left = plt.axes([0.039, 0.01, 0.22, 0.98])
         self.ax_left.axis('off')
 
         # Legend box
         self.box_legend = FancyBboxPatch(
-            (0.2, 0.0), 0.9, 1,
+            (0.2, 0.0), 0.906, 1,
             transform=self.ax_left.transAxes,
             boxstyle="round,pad=0.0,rounding_size=0.00",
             facecolor="#EFDFD8", edgecolor=(0, 0, 0, 0.25), linewidth=1.0,
         )
         self.ax_left.add_patch(self.box_legend)
 
-
-        # Title
-        self.ax_left.text(
-            0.6, 0.98, "Settings",
-            transform=self.ax_left.transAxes,
-            ha="center", va="top",
-            fontsize=14, weight="bold"
-        )
+        fig.text(0.6, 0.988, "Settings",
+                            transform=self.ax_left.transAxes,
+                            ha="center", va="top", fontsize=16, weight="bold",
+                            family="Arial", style="italic",color="white",
+                            path_effects=[pe.withSimplePatchShadow(offset=(1,-1), alpha=0.4)]
+                            )
 
         # --- Static settings text (computed once) ---
 
