@@ -1,6 +1,47 @@
 # 3D-Planning-and-Control
 
-Currently doing some updates, so the other files can be ignored until the updates are done. This project provides Python code to simulate Quadrotor flight using different control techniques for different scenarios.
+A drone flight simulation tool (currently based on quadcopters) for experimenting with algorithms in planning and control in different deployment scenarios. Updates in progress, watch this space.
+
+## Description
+
+This Python project allows users to simulate drone flight with provisions for choosing different control techniques and tweak simulation parameters in order to examine their effects. The intention is to provide a relatively lightweight tool which is designed to be modular and extensible. While it is still a work in progress in terms of simulation fidelity and structure, many features are already available to get started. 
+
+## Getting Started
+
+### Dependencies
+
+Uses the following Python packages:
+
+* **NumPy**
+* **SciPy**
+* **JAX**
+* **CasADi**
+* **Matplotlib**
+
+### Installing
+*	Recommended to set up a virtual environment with the required libraries and run the script inside the environment
+
+### Executing program
+*	Comment/uncomment lines in main.py to set desired planner, visualization etc. and simply execute the script. For tweaking other parameters, refer to the yaml files in the config folder.
+*	Please refer to the documentation file (under development) for details regarding the project and theory behind the implementation
+
+## Planned updates/To-dos
+*	Add differential flatness feature to enable trajectory tracking for more aggressive paths
+*	Add option for noisy estimates (and filtering techniques)
+*	Direct Trajectory optimization such as Collocation
+*	Improve PID autotuning
+*	Port iLQR and CBF to new version of project
+*	All the other “to-do”s in the code (sigh)
+
+
+
+
+
+
+
+
+
+<!-- Currently doing some updates, so the other files can be ignored until the updates are done. This project provides Python code to simulate Quadrotor flight using different control techniques for different scenarios.
 
 
 ![Obstacle avoidance using iLQR](QuadSim.gif) 
@@ -48,4 +89,4 @@ A **CBF (Control Barrier Function)** setting for obstacle avoidance is also avai
 * Add options for simulating with disturbances such as wind and noisy estimates (which will requires estimation techniques) 
 * Direct Trajectory optimization such as Collocation
 * Improve PID autotuning 
-* Update requirements.txt
+* Update requirements.txt -->

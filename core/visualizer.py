@@ -20,6 +20,7 @@ class Visualizer():
             self.planner_name = planner.planner_name
             self.interpolator_name = planner.interpolator_name
             self.trajectory_object = trajectory_object
+            self.planner_res = planner.voxel_resolution
 
             # === Precompute planned trajectory positions ===
             pos_des_all = np.zeros((3, len(times)))
@@ -32,6 +33,7 @@ class Visualizer():
         else:
               self.planner_name = " - "
               self.interpolator_name = " - "
+              self.planner_res = " - "
 
     # Generate Plots
     def plot_states(self):
@@ -113,10 +115,7 @@ class Visualizer():
             path_effects=[pe.withSimplePatchShadow(offset=(1,-1), alpha=0.4)]
         )
 
-        # hud_title = fig.text(0.5, 0.98, "Flight Animation",ha="center", va="top", fontsize=16, weight="bold", family="Arial", style="italic")
-
         # ------------------------------------------------------------------
-
 
         self.ax_anim = plt.axes(projection='3d')
 
@@ -125,7 +124,6 @@ class Visualizer():
             a.pane.set_edgecolor((1, 1, 1, 0.1))    # faint edges
         self.ax_anim.zaxis.pane.set_facecolor("#FFD39B") 
 
-        # self.ax_anim.set_facecolor("skyblue")
         self.ax_anim.set_facecolor("#c1e4f5")
         self.ax_anim.tick_params(colors=(0,0,0), labelsize=5)
         self.ax_anim.grid(False)
@@ -133,7 +131,6 @@ class Visualizer():
 
         # Adjust the size of the plot within the figure
         plt.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
-
 
         self.ax_side = plt.axes([0.74, 0.0, 0.22, 1.0])
         self.ax_side.axis('off')
@@ -162,8 +159,6 @@ class Visualizer():
             alpha=0.95
         )
         fig.patches.append(banner_legend)
-
-
 
          # Two rounded boxes inside ax_side (coords are in ax_side Axes coordinates)
         self.box_data = FancyBboxPatch(
@@ -213,7 +208,6 @@ class Visualizer():
             ("Actual Trajectory", "gray", "."),      
         ]
     
-
         y_pos = 0.5
         for label, color, marker in legend_items:
             self.ax_side.plot(
@@ -240,7 +234,6 @@ class Visualizer():
         )
         fig.patches.append(banner_settings)
 
-
         # --- Left sidebar for Legend ---
         self.ax_left = plt.axes([0.039, 0.01, 0.22, 0.98])
         self.ax_left.axis('off')
@@ -263,32 +256,136 @@ class Visualizer():
 
         # --- Static settings text (computed once) ---
 
-        dt        = self.params["time"]["dt"]
+        # dt        = self.params["time"]["dt"]
+        # mass = self.params["quadcopter"]["mass"]
+        # arm_length = self.params["quadcopter"]["arm_length"]
+        # if (self.params["world"]["wind"]["active"] == "True"):
+        #       wind = "Active"
+        # else:
+        #       wind = "Off"
+              
+        # input_delay = dt * self.params["time"]["delay_time_step"]
+
+        # settings_str = (
+        #     f" Mass: {mass} Kg\n"
+        #     f" Arm Length: {arm_length} m\n"            
+        #     f" Controller: {self.controller_name}\n"
+        #     f" Planner: {self.planner_name}\n"
+        #     f" Interpolator: {self.interpolator_name}\n"
+        #     f" Sim time step: {dt} s\n" 
+        #     f" Controller time step: {self.controller_dt} s\n"
+        #     f" Control Input delay: {input_delay} s\n"
+        #     f" Wind Disturbances: {wind} \n"
+        # )
+
+        # self.ax_left.text(
+        #     0.22, 0.92, settings_str, transform=self.ax_left.transAxes,
+        #     ha="left", va="top", family="DejaVu Sans Mono", fontsize=10, color="#222", style="italic", linespacing=2
+        # )
+
+        # --- Static settings text (computed once) ---
+
+        dt = self.params["time"]["dt"]
         mass = self.params["quadcopter"]["mass"]
         arm_length = self.params["quadcopter"]["arm_length"]
-        if (self.params["world"]["wind"]["active"] == "True"):
-              wind = "Active"
-        else:
-              wind = "Off"
-              
+
         input_delay = dt * self.params["time"]["delay_time_step"]
 
-        settings_str = (
-            f" Mass: {mass} Kg\n"
-            f" Arm Length: {arm_length} m\n"            
-            f" Controller: {self.controller_name}\n"
-            f" Planner: {self.planner_name}\n"
-            f" Interpolator: {self.interpolator_name}\n"
-            f" Sim time step: {dt} s\n" 
-            f" Controller time step: {self.controller_dt} s\n"
-            f" Control Input delay: {input_delay} s\n"
-            f" Wind Disturbances: {wind} \n"
+        # wind = "On" if self.params["world"]["wind"]["active"] == "True" else "Off"
+        if (self.params["world"]["wind"]["active"] == "True"):
+              wind = self.params["world"]["wind"]["type"]
+        else:
+              wind = "Off"
+
+
+        I_xx = self.params["quadcopter"]["I_xx"]
+        I_yy = self.params["quadcopter"]["I_yy"]
+        I_zz = self.params["quadcopter"]["I_zz"]
+        kf = self.params["quadcopter"]["motor"]["kf"]
+        km = self.params["quadcopter"]["motor"]["km"]
+
+
+        planner_type = self.planner_name
+        planner_res  = self.planner_res
+
+        controller_type = self.controller_name
+        controller_freq = 1 / self.controller_dt if self.controller_dt else "N/A"
+
+        actuator_limit = self.params["quadcopter"]["limits"]["clip_factor"]
+
+        # ---------- HEADER STYLE ----------
+        def draw_header(y, text):
+            self.ax_left.text(
+                0.25, y, text,
+                transform=self.ax_left.transAxes,
+                ha="left", va="top",
+                fontsize=12,
+                weight="bold",
+                family="Arial",
+                color="#3b3b3b"
+            )
+
+        # ---------- CONTENT STYLE ----------
+        def draw_block(y, text):
+            self.ax_left.text(
+                0.27, y, text,
+                transform=self.ax_left.transAxes,
+                ha="left", va="top",
+                family="DejaVu Sans Mono",
+                fontsize=9.5,
+                color="#222",
+                linespacing=1.6
+            )
+
+
+        y = 0.92
+
+        # === SIM PARAMETERS ===
+        draw_header(y, "Sim Parameters")
+        y -= 0.04
+        draw_block(y,
+            f"Time Step: {dt} s\n"
+            f"Input Delay: {input_delay} s\n"
+            f"Actuator limit factor: {actuator_limit}\n"
+            f"Wind: {wind}"
         )
 
-        self.ax_left.text(
-            0.22, 0.92, settings_str, transform=self.ax_left.transAxes,
-            ha="left", va="top", family="DejaVu Sans Mono", fontsize=10, color="#222", style="italic", linespacing=2
+        y -= 0.15
+
+        # === QUADCOPTER PARAMETERS ===
+        draw_header(y, "Quadcopter Parameters")
+        y -= 0.04
+        draw_block(y,
+            f"Mass: {mass} kg\n"
+            f"I_xx: {I_xx}\n"
+            f"I_yy: {I_yy}\n"
+            f"I_zz: {I_zz}\n"                        
+            f"Arm Length: {arm_length} m\n"
+            f"Kf: {kf}\n"
+            f"Km: {km}"
         )
+
+        y -= 0.25
+
+        # === PLANNER PARAMETERS ===
+        draw_header(y, "Planner Parameters")
+        y -= 0.04
+        draw_block(y,
+            f"Type: {planner_type}\n"
+            f"Resolution: {planner_res}"
+        )
+
+        y -= 0.15
+
+        # === CONTROLLER PARAMETERS ===
+        draw_header(y, "Controller Parameters")
+        y -= 0.04
+        draw_block(y,
+            f"Type: {controller_type}\n"
+            f"Update Frequency: {controller_freq if controller_freq == 'N/A' else f'{controller_freq:.1f} Hz'}"
+        )
+
+
 
 
         # --- ---------------------------------------------
