@@ -11,6 +11,10 @@ class Hover_Controller(Controller):
         self.controller_dt = self.controller_params["rates_hz"]
         self.controller_name = "Hover Controller"
 
+    def set_trajectory(self, trajectory):
+        pass
+        # self.trajectory_object = trajectory
+        # self.lqr_K = self.calculate_gains(trajectory)
 
     def calculate_control(self,x,t): #-> str:
         """Calculate and return control input"""

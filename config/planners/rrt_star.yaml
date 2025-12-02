@@ -1,6 +1,6 @@
 type: RRT_STAR              # ASTAR | DIJKSTRA | RRT_STAR
 grid:
-  resolution: 0.2
+  resolution: 0.05
   limits: {x: [-5,5], y: [-5,5], z: [-5,5]}
 interpolation: "Quintic"
 obstacle_inflation_ratio: 1.5

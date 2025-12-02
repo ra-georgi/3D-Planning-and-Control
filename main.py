@@ -17,9 +17,10 @@ with open("config/default.yaml", "r") as f:
     sim_cfg = yaml.safe_load(f)
 
 # planner    = Dijkstra_Planner(sim_cfg)
-planner    = AStar_Planner(sim_cfg)
-# planner    = RRTStar_Planner(sim_cfg)
+# planner    = AStar_Planner(sim_cfg)
+planner    = RRTStar_Planner(sim_cfg)
 
+# controller = Hover_Controller(sim_cfg)
 controller = Cascade_PID(sim_cfg)
 # controller = LQR_Controller(sim_cfg)
 # controller = MPC_Controller(sim_cfg)
@@ -35,5 +36,4 @@ times, states, controls = simulator.simulate(controller, controller.controller_d
 visualizer = Visualizer(sim_cfg, times, states, controls, controller, planner, trajectory_object)
 # #TODO: add option to display tracking error/error data
 visualizer.plot_states()
-# #TODO: add legend to animation
 visualizer.animate_quadcopter()
