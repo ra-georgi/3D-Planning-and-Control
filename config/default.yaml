@@ -1,6 +1,6 @@
 time:                      # Assumptions: controller_dt ≥ sim_dt, input_delay = delay_time_step*dt, input_delay ≤ controller_dt
   dt: 0.01
-  duration: 4.0
+  duration: 7
   delay_time_step: 0       #input delay, represented as number of time steps after calculating control, to apply the control. Set to 0, for no input delay
 
 quadcopter:
@@ -12,9 +12,6 @@ quadcopter:
   motor: {kf: 1, km: 0.0245}
   limits:
     clip_factor: 10   # Max control input represented as clip_factor*quad_weight
-    # roll_pitch_rad: 0.6
-    # yaw_rate: 3.5
-    # thrust_total: [0.0, 18.0]
 
 constants:
   acc_gravity: 9.81
@@ -26,20 +23,17 @@ world:
                     0.0, 0.0, 0.0,             # Velocity
                     0.0, 0.0, 0.0 ]}           # Angular Velocity
 
-    - {t: 1.0,  pose: [0.0, 0.0, 2.0,
+    - {t: 3.0,  pose: [1.0, 1.0, 1.0,  
                     1.0, 0.0, 0.0, 0.0,        
                     0.0, 0.0, 0.0,             
                     0.0, 0.0, 0.0 ]} 
 
-    - {t: 2.0,  pose: [1.0, 0.0, 2.0,
+    - {t: 6.0,  pose: [2.0, 2.0, 1.0,  
                     1.0, 0.0, 0.0, 0.0,        
                     0.0, 0.0, 0.0,             
                     0.0, 0.0, 0.0 ]}    
 
-    - {t: 3.0,  pose: [1.0, 1.0, 2.0,
-                    1.0, 0.0, 0.0, 0.0,        
-                    0.0, 0.0, 0.0,             
-                    0.0, 0.0, 0.0 ]}                             
+          
   wind:
     active: "False"  # |  "True"
     type: "constant" #| "gaussian" | "constant"  #TODO: Try other wind models/variations 
@@ -50,8 +44,8 @@ world:
 obstacles:
   static:
     # - {type: sphere, pose: [0.0, 0.0, 1.5], radius: 0.2}                         #TODO: Handle cases with no objects
-    # - {type: sphere, pose: [0.5, 0.0, 2], radius: 0.2}                         
-    - {type: sphere, pose: [0.5, 0.5, 2], radius: 0.2}                         
+    - {type: sphere, pose: [0.5, 0.5, 1], radius: 0.2}                         
+    - {type: sphere, pose: [1.5, 1.5, 1], radius: 0.2}                         
       # - {type: box, pose: [2.0, 0.0, 1.0, 0,0,0], size: [0.2, 4.0, 2.0]}
 
 
@@ -62,31 +56,9 @@ obstacles:
 #   save_telemetry: true
 #   out_dir: outputs
 
-# vehicle:
-#   mass: 1.25
-#   inertia: [0.02, 0.02, 0.04]
-#   arm_length: 0.17
-#   motor: {kf: 2.3e-6, km: 1.2e-7, max_rpm: 14000}
-#   limits:
-#     roll_pitch_rad: 0.6
-#     yaw_rate: 3.5
-#     thrust_total: [0.0, 18.0]
 
-# controller:
-#   type: iLQR               # PID | LQR | iLQR | MPC
-#   pid:
-#     gains:
-#       roll:  {kp: 4.0, ki: 0.2, kd: 0.1}
-#       pitch: {kp: 4.0, ki: 0.2, kd: 0.1}
-#       yaw:   {kp: 2.5, ki: 0.1, kd: 0.05}
-#       z:     {kp: 6.0, ki: 0.3, kd: 0.2}
-#     loop_rate_hz: 200
-#   ilqr:
-#     horizon_steps: 50
-#     max_iters: 50
-#     regularization: {lambda_init: 1.0, lambda_factor: 10.0}
-#     line_search: [1.0, 0.5, 0.25, 0.1]
-#     constraints: {thrust_min: 0.0, thrust_max: 15.0}
+
+
 
 
 

@@ -22,7 +22,11 @@ class Hover_Controller(Controller):
         g  = self.sim_params["constants"]["acc_gravity"]
         kf = self.sim_params["quadcopter"]["motor"]["kf"]
         u = (1/kf)*(m*g)/4
-        return u*np.ones((4))
+        u_array = u*np.ones((4))
+        # u_array[2] = 1.01*u_array[3]
+        # u_array[3] = 1.01*u_array[3]
+    
+        return u_array
         
 
 

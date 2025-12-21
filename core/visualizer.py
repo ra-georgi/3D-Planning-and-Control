@@ -34,6 +34,7 @@ class Visualizer():
               self.planner_name = " - "
               self.interpolator_name = " - "
               self.planner_res = " - "
+              self.pos_des_all = None
 
     # Generate Plots
     def plot_states(self):
@@ -455,9 +456,9 @@ class Visualizer():
         # === Plot planned trajectory (static) ===
         if self.pos_des_all is not None:
             self.quad_traj_planned = self.ax_anim.plot3D(
-                self.pos_des_all[0, :],   #self.pos_des_all[0, 0],  Uncomment last line at end too
-                self.pos_des_all[1, :],
-                self.pos_des_all[2, :],
+                self.pos_des_all[0, 0],   #self.pos_des_all[0, :],  Uncomment last line at end too
+                self.pos_des_all[1, 0],
+                self.pos_des_all[2, 0],
                 'b',  # blue dashed planned path
                 linewidth=1.0
             )[0]
@@ -569,9 +570,10 @@ class Visualizer():
                 )
             )
 
-            # self.quad_traj_planned.set_data_3d(self.pos_des_all[0, :frame],
-            #                         self.pos_des_all[1, :frame],
-            #                         self.pos_des_all[2, :frame])          
+            if self.pos_des_all is not None:
+                self.quad_traj_planned.set_data_3d(self.pos_des_all[0, :frame],
+                                        self.pos_des_all[1, :frame],
+                                        self.pos_des_all[2, :frame])          
 
 
             return 

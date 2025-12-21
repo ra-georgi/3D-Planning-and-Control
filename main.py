@@ -27,13 +27,9 @@ controller = Cascade_PID(sim_cfg)
 trajectory, trajectory_object = planner.calculate_trajectory()
 controller.set_trajectory(trajectory_object)
 
-# controller = Hover_Controller(sim_cfg)
-
 simulator  = Simulator(sim_cfg)
 times, states, controls = simulator.simulate(controller, controller.controller_dt)
 
-# visualizer = Visualizer(sim_cfg, times, states, controls, controller, None)
 visualizer = Visualizer(sim_cfg, times, states, controls, controller, planner, trajectory_object)
-# #TODO: add option to display tracking error/error data
 visualizer.plot_states()
 visualizer.animate_quadcopter()
