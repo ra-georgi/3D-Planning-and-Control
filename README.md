@@ -1,5 +1,9 @@
 # 3D-Planning-and-Control
 
+<p align ="center">
+  <img src="QS.gif" alt="Simulation GIF" />
+</p>
+
 A drone flight simulation tool (currently based on quadcopters) for experimenting with algorithms in planning and control in different deployment scenarios. Updates in progress, watch this space.
 
 ## Description
