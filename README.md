@@ -10,6 +10,10 @@ A drone flight simulation tool (currently based on quadcopters) for experimentin
 
 This Python project allows users to simulate drone flight with provisions for choosing different control techniques and tweak simulation parameters in order to examine their effects. The intention is to provide a relatively lightweight tool which is designed to be modular and extensible. While it is still a work in progress in terms of simulation fidelity and structure, many features are already available to get started. 
 
+<p align ="center">
+  <img src="Plots.png" alt="Plots image" />
+</p>
+
 ## Getting Started
 
 ### Dependencies
