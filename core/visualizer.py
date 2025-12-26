@@ -444,7 +444,7 @@ class Visualizer():
         obstacles =  self.params["obstacles"]["static"]
         for obstacle in obstacles:
             radius_obstacle = obstacle["radius"]
-            u_grid, v_grid = np.mgrid[0:2*np.pi:50j, 0:np.pi:50j]
+            u_grid, v_grid = np.mgrid[0:2*np.pi:10j, 0:np.pi:10j]
             x_grid = radius_obstacle*np.cos(u_grid)*np.sin(v_grid)
             y_grid = radius_obstacle*np.sin(u_grid)*np.sin(v_grid) 
             z_grid = radius_obstacle*np.cos(v_grid)

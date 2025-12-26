@@ -96,16 +96,16 @@ class Cascade_PID2(Controller):
 
             # Assuming yaw_des = 0, small angle approximation, T = mg, TODO: Incorporate desired yaw, more general model, possibly with quaternions
             self.phi_des = np.degrees(ay_reqd/g)
-            if self.phi_des > 30:           # To stay close to small angle approximation
-                self.phi_des = 30
-            elif self.phi_des < -30:
-                self.phi_des = -30
+            if self.phi_des > 15:           # To stay close to small angle approximation
+                self.phi_des = 15
+            elif self.phi_des < -15:
+                self.phi_des = -15
 
             self.theta_des = np.degrees(ax_reqd/g)
-            if self.theta_des > 30:
-                self.theta_des = 30
-            elif self.theta_des < -30:
-                self.theta_des = -30
+            if self.theta_des > 15:
+                self.theta_des = 15
+            elif self.theta_des < -15:
+                self.theta_des = -15
 
             self.t_outer = 0
 

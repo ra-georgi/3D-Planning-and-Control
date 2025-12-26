@@ -6,7 +6,7 @@ from controllers.cascade_pid2 import Cascade_PID2
 with open("config/default.yaml", "r") as f:
     sim_cfg = yaml.safe_load(f)
 
-controller = Cascade_PID2(sim_cfg, True, [0,1,1,0,0,0])
+controller = Cascade_PID2(sim_cfg, True, [1,0,2,0,0,0])
 
 
 simulator  = Simulator(sim_cfg)

@@ -1,6 +1,6 @@
 time:                      # Assumptions: controller_dt ≥ sim_dt, input_delay = delay_time_step*dt, input_delay ≤ controller_dt
   dt: 0.01
-  duration: 7
+  duration: 6
   delay_time_step: 0       #input delay, represented as number of time steps after calculating control, to apply the control. Set to 0, for no input delay
 
 quadcopter:
@@ -11,7 +11,7 @@ quadcopter:
   arm_length: 0.175
   motor: {kf: 1, km: 0.0245}
   limits:
-    clip_factor: 10   # Max control input represented as clip_factor*quad_weight
+    clip_factor: 20   # Max control input represented as clip_factor*quad_weight
 
 constants:
   acc_gravity: 9.81
@@ -23,12 +23,12 @@ world:
                     0.0, 0.0, 0.0,             # Velocity
                     0.0, 0.0, 0.0 ]}           # Angular Velocity
 
-    - {t: 3.0,  pose: [1.0, 1.0, 1.0,  
+    - {t: 2.0,  pose: [1.0, 1.0, 2.0,  
                     1.0, 0.0, 0.0, 0.0,        
                     0.0, 0.0, 0.0,             
                     0.0, 0.0, 0.0 ]} 
 
-    - {t: 6.0,  pose: [2.0, 2.0, 1.0,  
+    - {t: 4.0,  pose: [2.0, 0.0, 1.0,  
                     1.0, 0.0, 0.0, 0.0,        
                     0.0, 0.0, 0.0,             
                     0.0, 0.0, 0.0 ]}    
@@ -43,9 +43,14 @@ world:
 
 obstacles:
   static:
-    # - {type: sphere, pose: [0.0, 0.0, 1.5], radius: 0.2}                         #TODO: Handle cases with no objects
-    - {type: sphere, pose: [0.5, 0.5, 1], radius: 0.2}                         
-    - {type: sphere, pose: [1.5, 1.5, 1], radius: 0.2}                         
+    - {type: sphere, pose: [1.0, 1.0, 2.5], radius: 0.2}                         #TODO: Handle cases with no objects
+    - {type: sphere, pose: [1.0, 0.5, 2], radius: 0.2}                         
+    - {type: sphere, pose: [1.0, 1.5, 2], radius: 0.2}      
+    - {type: sphere, pose: [1.0, 1.0, 1.5], radius: 0.2}     
+    - {type: sphere, pose: [1.5, 0.0, 1.0], radius: 0.2}                         
+    - {type: sphere, pose: [2.5, 0.0, 1.0], radius: 0.2}                         
+    - {type: sphere, pose: [2.0, 0.5, 1.0], radius: 0.2}      
+    - {type: sphere, pose: [2.0, -0.5, 1.0], radius: 0.2}                      
       # - {type: box, pose: [2.0, 0.0, 1.0, 0,0,0], size: [0.2, 4.0, 2.0]}
 
 

@@ -4,14 +4,14 @@ rates_hz:
   outer_loop: 20
 gains:
   outer_loop:
-    proportional: {x: 50.0,  y: 50.0,  z: 35.0}
-    integral:     {x: 0.0,   y:  0.0,  z: 0.0}
-    derivative:   {x: 25.0,  y: 25.0,  z: 8.0}
+    proportional: {x: 15.0,  y: 15.0,  z: 70.0}
+    integral:     {x: 0.0,   y: 0.0,  z: 0.0}
+    derivative:   {x: 7.0,   y: 7.0,  z: 15.0}
 
   inner_loop:
-    proportional: {phi: 0.005, theta: 0.005,  psi: 0.0} 
+    proportional: {phi: 0.02, theta: 0.02,  psi: 0.0} 
     integral:     {phi: 0.0,   theta: 0.0,    psi: 0.0} 
-    derivative:   {phi: 0.05,  theta: 0.05,   psi: 0.0} 
+    derivative:   {phi: 0.08,  theta: 0.08,   psi: 0.0} 
 # gains:
 #   outer_loop:
 #     proportional: {x: 2.56278919e+01,  y: 2.56278919e+01, z: 2.57012684e+00}
